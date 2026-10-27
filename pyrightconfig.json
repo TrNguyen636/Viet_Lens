@@ -1,0 +1,8 @@
+{
+  "venvPath": "VLensBE/PaiService",
+  "venv": "venv",
+  "extraPaths": [
+    "VLensBE/PaiService",
+    "VLensBE/PaiService/venv/Lib/site-packages"
+  ]
+}

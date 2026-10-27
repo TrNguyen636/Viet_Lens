@@ -1,0 +1,34 @@
+# Environment files (NEVER commit secrets)
+.env
+.env.*
+!.env.example
+*.env
+
+# Operating System / Crash dumps
+hs_err_pid*.log
+replay_pid*.log
+Thumbs.db
+.DS_Store
+
+# IDE & Editor
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+
+# Python virtual environment & cache
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+
+# Node / Expo / Build artifacts
+node_modules/
+.expo/
+dist/
+web-build/
+target/
+build/

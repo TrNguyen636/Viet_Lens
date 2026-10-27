@@ -1,0 +1,49 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?sslmode=require}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 20000
+      idle-timeout: 300000
+      max-lifetime: 600000
+      leak-detection-threshold: 10000
+
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    show-sql: false
+    hibernate:
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
+    properties:
+      hibernate:
+        format_sql: false
+
+# Supabase JWT & JWKS Configuration
+supabase:
+  project-url: ${SUPABASE_PROJECT_URL:https://fjqgblqepphurmyyiusq.supabase.co}
+  jwt:
+    # Điểm cuối JWKS tự động tải các Public Key (hỗ trợ ES256 P-256 hiện tại và tự động xoay khóa)
+    jwks-uri: ${SUPABASE_JWKS_URI:https://fjqgblqepphurmyyiusq.supabase.co/auth/v1/.well-known/jwks.json}
+    # Issuer của Supabase
+    issuer: ${SUPABASE_JWT_ISSUER:https://fjqgblqepphurmyyiusq.supabase.co/auth/v1}
+    # Tùy chọn: secret cho fallback HS256 nếu có token cũ (được truyền qua biến môi trường để không lộ bí mật)
+    secret: ${SUPABASE_JWT_SECRET:}
+
+# Cấu hình Groq AI theo chuẩn OpenAI
+ai:
+  openai:
+    api-key: ${GROQ_API_KEY}
+    base-url: https://api.groq.com/openai/v1/chat/completions
+    chat:
+      options:
+        model: openai/gpt-oss-120b
+        temperature: 0.7
+        max-tokens: 1024
+    embedding:
+      enabled: false
