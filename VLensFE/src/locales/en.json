@@ -1,0 +1,90 @@
+{
+  "common": {
+    "appName": "VietLens",
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "retry": "Retry",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "success": "Success",
+    "notice": "Notice",
+    "guestNotice": "Please sign in to access this feature!",
+    "unauthorized": "Not signed in"
+  },
+  "nav": {
+    "home": "Explore",
+    "camera": "AI Vision",
+    "map": "Map",
+    "chat": "AI Advisor",
+    "profile": "Profile"
+  },
+  "home": {
+    "greetingMorning": "Good morning,",
+    "greetingDefault": "Explorer",
+    "searchPlaceholder": "Search temples, pagodas, dynasties...",
+    "nearbySectionTitle": "Featured Heritage Near You",
+    "openMap": "Open Map",
+    "loadingData": "Loading cultural heritage database...",
+    "locating": "Locating...",
+    "cameraBannerTag": "AI VISION CAMERA",
+    "cameraBannerHeading": "Standing before a heritage relic?",
+    "cameraBannerSub": "Point camera to recognize and listen instantly",
+    "categoriesTitle": "Heritage Categories",
+    "emptySearchTitle": "No matching heritage found",
+    "emptySearchSub": "Try searching with different keywords or switch categories"
+  },
+  "detail": {
+    "audioGuideTitle": "AI Audio Guide Narration",
+    "audioGuidePlaying": "Playing English audio guide...",
+    "audioGuideSub": "Tap to listen to historical and architectural summary",
+    "audioPause": "Pause",
+    "audioPlay": "Listen Now",
+    "aboutSection": "About This Heritage",
+    "aboutDefault": "Content is being updated for this heritage site.",
+    "keyFigures": "Historical Figures",
+    "reviewsTitle": "Community Reviews",
+    "writeReview": "+ Write a review",
+    "emptyReviews": "No reviews yet. Be the first to share your experience!",
+    "askAi": "Ask AI Assistant About This Relic",
+    "bookmarkSuccess": "Saved to your bookmarks",
+    "bookmarkRemoved": "Removed from bookmarks"
+  },
+  "chat": {
+    "headerTitle": "AI Heritage Advisor",
+    "inputPlaceholder": "Ask a question about history, architecture...",
+    "send": "Send",
+    "quickQuestions": "Suggested questions:",
+    "listening": "Narrating..."
+  },
+  "profile": {
+    "title": "My Profile",
+    "bookmarks": "Saved Places",
+    "language": "Language",
+    "languageVi": "Tiếng Việt",
+    "languageEn": "English",
+    "logout": "Log Out"
+  },
+  "camera": {
+    "permTitle": "Camera Permission Required",
+    "permDesc": "VietLens needs camera access to scan and recognize historical temples, citadels, and artifacts right in front of you.",
+    "grantBtn": "Allow Camera Access",
+    "openSettingsBtn": "Open App Settings",
+    "pickGallery": "Choose from Gallery",
+    "sampleMode": "Simulation Mode",
+    "liveMode": "Live Camera",
+    "initializing": "Initializing camera...",
+    "guideText": "Point camera at temple gates, pagoda roofs, or artifacts",
+    "analyzing": "Analyzing with AI Vision...",
+    "analyzingSub": "Matching architectural motifs & Dai Viet patterns",
+    "aiMatch": "AI Confidence",
+    "viewMap": "View on Map",
+    "chatWithAi": "Chat with AI",
+    "viewFullDetails": "Open full heritage details page",
+    "notRecognized": "Heritage Not Recognized",
+    "notRecognizedSub": "Confidence score is too low or image is unclear. Please take a clearer photo or try another angle.",
+    "retake": "Retake",
+    "pickAnother": "Pick Another",
+    "serverError": "Cannot Connect to AI Server",
+    "serverErrorSub": "Please verify the AI service (port 8000) and ensure your device is on the same Wi-Fi LAN."
+  }
+}

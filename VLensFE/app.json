@@ -1,0 +1,56 @@
+{
+  "expo": {
+    "name": "VLensFE",
+    "slug": "VLensFE",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Cho phép VietLens sử dụng máy ảnh để quét và nhận diện các di tích lịch sử."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Cho phép VietLens truy cập vị trí để định vị trên bản đồ và gợi ý các di sản lân cận."
+        }
+      ],
+      "expo-font",
+      "expo-status-bar"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Cho phép VietLens sử dụng máy ảnh để quét và nhận diện các di tích lịch sử.",
+        "NSPhotoLibraryUsageDescription": "Cho phép VietLens truy cập thư viện ảnh để phân tích di tích.",
+        "NSLocationWhenInUseUsageDescription": "Cho phép VietLens truy cập vị trí để định vị trên bản đồ và gợi ý các di sản lân cận."
+      }
+    },
+    "android": {
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
+      ],
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "package": "com.anonymous.VLensFE"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "43d4998b-6e6e-4b15-9458-d4d4898f0c76"
+      }
+    }
+  }
+}

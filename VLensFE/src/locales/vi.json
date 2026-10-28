@@ -1,0 +1,90 @@
+{
+  "common": {
+    "appName": "VietLens",
+    "loading": "Đang tải...",
+    "error": "Đã có lỗi xảy ra",
+    "retry": "Thử lại",
+    "cancel": "Hủy",
+    "confirm": "Xác nhận",
+    "success": "Thành công",
+    "notice": "Thông báo",
+    "guestNotice": "Vui lòng đăng nhập tài khoản để thực hiện tính năng này!",
+    "unauthorized": "Chưa đăng nhập"
+  },
+  "nav": {
+    "home": "Khám phá",
+    "camera": "AI Vision",
+    "map": "Bản đồ",
+    "chat": "Cố vấn AI",
+    "profile": "Tài khoản"
+  },
+  "home": {
+    "greetingMorning": "Chào buổi sáng,",
+    "greetingDefault": "Nhà Khám Phá",
+    "searchPlaceholder": "Tìm đền chùa, lăng tẩm, triều đại...",
+    "nearbySectionTitle": "Di sản nổi bật quanh bạn",
+    "openMap": "Mở bản đồ",
+    "loadingData": "Đang tải dữ liệu từ CSDL di sản...",
+    "locating": "Đang định vị",
+    "cameraBannerTag": "AI VISION CAMERA",
+    "cameraBannerHeading": "Đang đứng trước một di tích?",
+    "cameraBannerSub": "Mở máy ảnh nhận diện và nghe thuyết minh ngay",
+    "categoriesTitle": "Danh mục di sản",
+    "emptySearchTitle": "Không tìm thấy di tích phù hợp",
+    "emptySearchSub": "Thử tìm kiếm với từ khóa khác hoặc chuyển danh mục"
+  },
+  "detail": {
+    "audioGuideTitle": "Thuyết Minh Audio Guide AI",
+    "audioGuidePlaying": "Đang đọc thuyết minh tiếng Việt...",
+    "audioGuideSub": "Nhấn để nghe giọng đọc tóm tắt lịch sử & kiến trúc",
+    "audioPause": "Tạm dừng",
+    "audioPlay": "Nghe ngay",
+    "aboutSection": "Giới Thiệu Di Sản",
+    "aboutDefault": "Đang cập nhật nội dung giới thiệu cho di sản này.",
+    "keyFigures": "Nhân vật lịch sử gắn liền",
+    "reviewsTitle": "Đánh giá từ cộng đồng",
+    "writeReview": "+ Viết đánh giá",
+    "emptyReviews": "Chưa có đánh giá nào. Hãy là người đầu tiên chia sẻ cảm nhận!",
+    "askAi": "Hỏi Trợ Lý AI Về Di Sản Này",
+    "bookmarkSuccess": "Đã lưu vào danh sách yêu thích",
+    "bookmarkRemoved": "Đã xóa khỏi danh sách yêu thích"
+  },
+  "chat": {
+    "headerTitle": "Cố Vấn AI Di Sản",
+    "inputPlaceholder": "Đặt câu hỏi về lịch sử, kiến trúc...",
+    "send": "Gửi",
+    "quickQuestions": "Gợi ý câu hỏi:",
+    "listening": "Đang đọc..."
+  },
+  "profile": {
+    "title": "Hồ sơ cá nhân",
+    "bookmarks": "Di sản đã lưu",
+    "language": "Ngôn ngữ",
+    "languageVi": "Tiếng Việt",
+    "languageEn": "English",
+    "logout": "Đăng xuất"
+  },
+  "camera": {
+    "permTitle": "Yêu Cầu Quyền Máy Ảnh",
+    "permDesc": "VietLens cần quyền truy cập máy ảnh để quét và nhận diện các đền đài, chùa chiền, lăng tẩm lịch sử ngay trước mắt bạn.",
+    "grantBtn": "Cho Phép Truy Cập Camera",
+    "openSettingsBtn": "Mở Cài Đặt Ứng Dụng",
+    "pickGallery": "Chọn từ thư viện",
+    "sampleMode": "Chế độ mô phỏng",
+    "liveMode": "Camera thật",
+    "initializing": "Đang khởi tạo máy ảnh...",
+    "guideText": "Hướng máy ảnh vào cổng đền, mái chùa hoặc hiện vật",
+    "analyzing": "Đang phân tích dữ liệu AI...",
+    "analyzingSub": "So khớp dữ liệu kiến trúc & hoa văn Đại Việt",
+    "aiMatch": "Độ khớp AI",
+    "viewMap": "Xem bản đồ",
+    "chatWithAi": "Trò chuyện AI",
+    "viewFullDetails": "Mở toàn bộ trang chi tiết di sản",
+    "notRecognized": "Không nhận diện được di sản",
+    "notRecognizedSub": "Độ khớp quá thấp hoặc hình ảnh chưa rõ ràng. Vui lòng chụp rõ nét hơn hoặc chọn góc chụp khác.",
+    "retake": "Chụp lại",
+    "pickAnother": "Chọn ảnh khác",
+    "serverError": "Không thể kết nối đến máy chủ AI",
+    "serverErrorSub": "Vui lòng kiểm tra máy chủ AI (cổng 8000) và đảm bảo thiết bị cùng mạng Wi-Fi LAN."
+  }
+}

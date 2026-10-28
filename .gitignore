@@ -32,3 +32,19 @@ dist/
 web-build/
 target/
 build/
+
+# Binary map files (over 100MB, strictly blocked by GitHub)
+*.pmtiles
+assets/maps/
+
+# Raw training images in Data For Training (keep CSVs, metadata and JSON)
+Data For Training/**/images/
+Data For Training/**/DaNang_Raw_Dataset/
+Data For Training/**/*.jpg
+Data For Training/**/*.jpeg
+Data For Training/**/*.png
+
+# Agent skills cache & backup folders
+.agents/
+skills-lock.json
+.git_fe_backup/

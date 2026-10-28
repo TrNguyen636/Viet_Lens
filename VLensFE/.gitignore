@@ -1,0 +1,55 @@
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files (NEVER commit secrets)
+.env
+.env.*
+.env*.local
+.env.local
+.env.production
+!.env.example
+
+# Large binary map files (Over 100MB)
+*.pmtiles
+assets/maps/
+
+# typescript
+*.tsbuildinfo
+
+# generated native folders
+/ios
+/android
+
+# Backups & local tooling
+.git_fe_backup/
+.agents/
+skills-lock.json
