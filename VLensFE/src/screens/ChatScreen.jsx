@@ -11,12 +11,16 @@ import {
   ActivityIndicator,
   Keyboard,
   Image,
+  Alert,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Speech from 'expo-speech';
+import * as ImagePicker from 'expo-image-picker';
+import { useTranslation } from 'react-i18next';
 import { THEME } from '../utils/theme';
 import appService from '../api/appService';
 import { adaptHeritage } from '../utils/heritageAdapter';
+import { predictHeritage } from '../services/aiVisionService';
 
 // Nhân vật Trợ lý AI duy nhất của ứng dụng
 const VIETLENS_AI = {
@@ -27,7 +31,8 @@ const VIETLENS_AI = {
   greeting: 'Xin chào! Tôi là VietLens AI. Rất vui được đồng hành và giải đáp mọi thắc mắc về lịch sử, kiến trúc và văn hóa cùng bạn.',
 };
 
-export default function ChatScreen({ activeSite = null }) {
+export default function ChatScreen({ activeSite = null, onNavigateToMap = null }) {
+  const { i18n } = useTranslation();
   const [currentSite, setCurrentSite] = useState(
     activeSite ? adaptHeritage(activeSite) : null
   );
@@ -170,6 +175,140 @@ export default function ChatScreen({ activeSite = null }) {
         'Nét đặc sắc của di sản Phố cổ Hội An là gì?',
         'Kinh nghiệm khám phá danh thắng Tràng An',
       ];
+
+  // ============================================================
+  // TÍCH HỢP CHỤP ẢNH & CHỌN ẢNH DI TÍCH TRỰC TIẾP TRONG CHAT
+  // ============================================================
+  const handleTakePhoto = async () => {
+    try {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert(
+          'Quyền máy ảnh',
+          'Vui lòng cấp quyền truy cập máy ảnh trong cài đặt thiết bị để chụp di tích.'
+        );
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.85,
+        base64: true,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        processCapturedImage(asset.uri, asset.base64);
+      }
+    } catch (err) {
+      console.warn('[ChatScreen] Lỗi kích hoạt máy ảnh:', err.message);
+    }
+  };
+
+  const handlePickImage = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.85,
+        base64: true,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        processCapturedImage(asset.uri, asset.base64);
+      }
+    } catch (err) {
+      console.warn('[ChatScreen] Lỗi chọn ảnh thư viện:', err.message);
+    }
+  };
+
+  const processCapturedImage = async (uri, base64) => {
+    const userMsg = {
+      id: Date.now().toString(),
+      sender: 'user',
+      image: uri,
+      text: 'Tôi vừa chụp bức ảnh này, hãy nhận diện di tích và chia sẻ về lịch sử, kiến trúc của nó nhé!',
+      time: 'Bây giờ',
+    };
+    setMessages((prev) => [...prev, userMsg]);
+    setIsTyping(true);
+    setTimeout(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+
+    try {
+      const currentLang = i18n?.language || 'vi';
+      const result = await predictHeritage(uri, currentLang, base64);
+
+      if (result && (result.recognized || result.heritageName)) {
+        const sitePayload = {
+          id: result.heritageId || 'pred-' + Date.now(),
+          name: result.name || result.heritageName,
+          province: result.province,
+          locationName: result.province,
+          address: result.address,
+          category: result.category || 'Di sản văn hóa',
+          latitude: result.latitude,
+          longitude: result.longitude,
+          image: uri,
+          userPhoto: uri,
+          description: result.description,
+          confidencePercent: result.confidencePercent,
+        };
+        setCurrentSite(sitePayload);
+
+        const explanation =
+          result.visionReasoning ||
+          result.description ||
+          'Đây là một di sản kiến trúc và văn hóa nổi tiếng của Việt Nam.';
+        const botReply = `✨ Tôi nhận diện đây là "${sitePayload.name}" (${sitePayload.province || 'Việt Nam'})${result.confidencePercent ? ` với độ tin cậy ${result.confidencePercent}` : ''}.\n\n${explanation}`
+          .replace(/\*\*/g, '')
+          .trim();
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: (Date.now() + 1).toString(),
+            sender: 'advisor',
+            text: botReply,
+            time: 'Bây giờ',
+            detectedSite: sitePayload, // Kích hoạt Thẻ hành động Xem trên Bản đồ
+          },
+        ]);
+      } else {
+        const fallbackReason =
+          result?.rejectionReason === 'OUT_OF_DOMAIN'
+            ? 'Hình ảnh này dường như không nằm trong danh mục các danh lam thắng cảnh hoặc di tích văn hóa Việt Nam.'
+            : 'Tôi chưa thể nhận diện rõ nét di tích trong ảnh. Bạn có thể chụp lại ở góc rõ hơn, đủ ánh sáng hoặc đặt câu hỏi trực tiếp cho tôi nhé!';
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: (Date.now() + 1).toString(),
+            sender: 'advisor',
+            text: fallbackReason,
+            time: 'Bây giờ',
+          },
+        ]);
+      }
+    } catch (err) {
+      console.warn('[ChatScreen] Error predicting heritage:', err.message);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          sender: 'advisor',
+          text: 'Tôi đã nhận được ảnh của bạn! Hiện việc nhận diện tự động đang tạm thời gián đoạn. Bạn có thể hỏi tôi trực tiếp bằng văn bản về di tích bạn đang quan tâm nhé!',
+          time: 'Bây giờ',
+        },
+      ]);
+    } finally {
+      setIsTyping(false);
+      setTimeout(() => {
+        scrollRef.current?.scrollToEnd({ animated: true });
+      }, 150);
+    }
+  };
 
   // Gửi tin nhắn đến VietLens AI (Groq AI hoặc Dynamic AI Context)
   const handleSend = async (textToSend = null) => {
@@ -347,6 +486,27 @@ export default function ChatScreen({ activeSite = null }) {
                     {msg.text}
                   </Text>
                 )}
+
+                {/* Thẻ hành động Điều hướng Bản đồ tương tác khi AI nhận diện thành công */}
+                {msg.detectedSite && (
+                  <TouchableOpacity
+                    style={styles.mapActionCard}
+                    onPress={() => onNavigateToMap && onNavigateToMap(msg.detectedSite)}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.mapActionIconCircle}>
+                      <Ionicons name="map" size={16} color="#FFF" />
+                    </View>
+                    <View style={styles.mapActionInfo}>
+                      <Text style={styles.mapActionTitle}>Xem vị trí trên Bản đồ</Text>
+                      <Text style={styles.mapActionSub} numberOfLines={1}>
+                        {msg.detectedSite.name} ({msg.detectedSite.province || 'Việt Nam'})
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color="#C62828" />
+                  </TouchableOpacity>
+                )}
+
                 <Text style={[styles.msgTime, isUser ? styles.msgTimeUser : styles.msgTimeAdvisor]}>
                   {msg.time}
                 </Text>
@@ -383,8 +543,23 @@ export default function ChatScreen({ activeSite = null }) {
         </ScrollView>
       </View>
 
-      {/* Ô Nhập tin nhắn */}
+      {/* Ô Nhập tin nhắn tích hợp Camera & Thư viện */}
       <View style={styles.inputContainer}>
+        <TouchableOpacity
+          style={styles.mediaBtn}
+          onPress={handleTakePhoto}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="camera" size={22} color={THEME.colors.red} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.mediaBtn}
+          onPress={handlePickImage}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="image-outline" size={22} color={THEME.colors.inkMuted} />
+        </TouchableOpacity>
+
         <TextInput
           style={styles.textInput}
           placeholder="Hỏi VietLens AI về di tích này..."
@@ -645,5 +820,50 @@ const styles = StyleSheet.create({
   },
   sendBtnDisabled: {
     backgroundColor: '#D1D5DB',
+  },
+  mediaBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 4,
+  },
+  mapActionCard: {
+    marginTop: 10,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1.5,
+    borderColor: '#FCD34D',
+    borderRadius: 14,
+    padding: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  mapActionIconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: THEME.colors.red,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapActionInfo: {
+    flex: 1,
+  },
+  mapActionTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+  mapActionSub: {
+    fontSize: 11,
+    color: '#B45309',
+    marginTop: 1,
   },
 });

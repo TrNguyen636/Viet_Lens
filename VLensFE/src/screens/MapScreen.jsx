@@ -469,9 +469,9 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
         <View style={styles.sitePreviewCard}>
           <View style={styles.sitePreviewHeader}>
             <View style={styles.sitePreviewThumbWrap}>
-              {selectedMarkerSite.image ? (
+              {(selectedMarkerSite.userPhoto || selectedMarkerSite.image) ? (
                 <Image
-                  source={{ uri: selectedMarkerSite.image }}
+                  source={{ uri: selectedMarkerSite.userPhoto || selectedMarkerSite.image }}
                   style={styles.sitePreviewThumb}
                 />
               ) : (

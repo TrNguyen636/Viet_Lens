@@ -838,7 +838,7 @@ TILE_SEARCH_DIRS = [
     os.path.join("C:", os.sep, "Project_DV", "Viet_Lens", "VLensFE", "assets", "maps"),
 ]
 
-@app.get("/tiles/{tile_name}")
+@app.api_route("/tiles/{tile_name}", methods=["GET", "HEAD"])
 async def serve_pmtiles(tile_name: str):
     """
     Phục vụ trực tiếp tệp PMTiles (vietnam.pmtiles 318MB, danang.pmtiles 18MB)

@@ -208,6 +208,11 @@ function generateMapHTML(pmtilesUrl, fallbackUrl, initialTheme = 'vietlens', is3
       const c = getLayerColors(theme);
       const isDark = theme === 'dark';
 
+      // Hỗ trợ cả Cloud Vector CDN (OpenFreeMap) lẫn file PMTiles nội bộ / Supabase
+      const sourceUrl = (pmUrl && pmUrl.endsWith('.pmtiles'))
+        ? ('pmtiles://' + pmUrl)
+        : (pmUrl || 'https://tiles.openfreemap.org/planet');
+
       return {
         version: 8,
         name: 'VietLens Vector Map Style',
@@ -215,7 +220,7 @@ function generateMapHTML(pmtilesUrl, fallbackUrl, initialTheme = 'vietlens', is3
         sources: {
           openmaptiles: {
             type: 'vector',
-            url: 'pmtiles://' + pmUrl
+            url: sourceUrl
           }
         },
         layers: [
@@ -277,12 +282,12 @@ function generateMapHTML(pmtilesUrl, fallbackUrl, initialTheme = 'vietlens', is3
         }
       });
 
-      // Cơ chế tự động fallback thông minh sang bản đồ Cloud Supabase
+      // Cơ chế tự động fallback thông minh sang bản đồ dự phòng
       let hasTriedFallback = false;
       function triggerFallback(reason) {
         if (!hasTriedFallback && fallbackUrl && currentPmtilesUrl !== fallbackUrl) {
           hasTriedFallback = true;
-          console.warn('[MapLibre] Chuyển đổi sang bản đồ dự phòng Cloud Supabase:', reason, fallbackUrl);
+          console.warn('[MapLibre] Chuyển đổi sang bản đồ dự phòng:', reason, fallbackUrl);
           currentPmtilesUrl = fallbackUrl;
           if (map) {
             map.setStyle(createMapStyle(currentPmtilesUrl, currentTheme));
@@ -290,47 +295,17 @@ function generateMapHTML(pmtilesUrl, fallbackUrl, initialTheme = 'vietlens', is3
         }
       }
 
-      // 1. Kiểm tra nhanh tính khả dụng của máy chủ nội bộ (cổng 8000)
-      // Nếu cổng 8000 chưa bật (hoặc dùng 3G không truy cập được), chuyển ngay sang link Supabase
-      if (currentPmtilesUrl && currentPmtilesUrl !== fallbackUrl) {
-        try {
-          const probeController = new AbortController();
-          const probeTimeout = setTimeout(function() { probeController.abort(); }, 1800);
-          fetch(currentPmtilesUrl, { method: 'HEAD', signal: probeController.signal })
-            .then(function(res) {
-              clearTimeout(probeTimeout);
-              if (!res.ok && res.status !== 206) {
-                triggerFallback('Máy chủ phản hồi trạng thái: ' + res.status);
-              }
-            })
-            .catch(function(e) {
-              clearTimeout(probeTimeout);
-              triggerFallback('Máy chủ cổng 8000 không hoạt động (' + e.message + ')');
-            });
-        } catch (_) {}
-      }
-
-      // 2. Bắt lỗi trong quá trình MapLibre tải tiles / vector layers
+      // Bắt lỗi trong quá trình MapLibre tải tiles / vector layers
       map.on('error', function(err) {
-        console.warn('MapLibre error:', err);
         const isTileOrSourceError = err && (
           err.sourceId === 'openmaptiles' ||
-          err.sourceId === 'pmtiles-vietnam' ||
           !err.sourceId ||
-          (err.error && (err.error.status === 404 || err.error.status === 0 || err.error.status === 500)) ||
-          (err.message && (err.message.toLowerCase().includes('fetch') || err.message.toLowerCase().includes('source') || err.message.toLowerCase().includes('pmtiles') || err.message.toLowerCase().includes('header')))
+          (err.error && (err.error.status === 404 || err.error.status === 0 || err.error.status === 500))
         );
         if (isTileOrSourceError) {
           triggerFallback(err.message || 'Lỗi tải vector tiles');
         }
       });
-
-      // 3. Watchdog: Nếu sau 2.5s mà source vector vẫn chưa load thành công
-      setTimeout(function() {
-        if (!hasTriedFallback && map && !map.isSourceLoaded('openmaptiles')) {
-          triggerFallback('Watchdog: openmaptiles chưa sẵn sàng sau 2.5s');
-        }
-      }, 2500);
     } catch (e) {
       console.error('Error init MapLibre:', e);
     }
@@ -580,7 +555,7 @@ const InteractiveHeritageMap = forwardRef(function InteractiveHeritageMap(
     onMapClick,
     is3D = true,
     theme = 'vietlens',
-    pmtilesUrl = MAP_CONFIG.PMTILES_URL,
+    pmtilesUrl = MAP_CONFIG.CLOUD_VECTOR_TILE_URL,
     fallbackUrl = MAP_CONFIG.FALLBACK_PMTILES_URL,
   },
   ref

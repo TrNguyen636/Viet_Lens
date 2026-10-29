@@ -5,7 +5,13 @@ import { getAiBaseUrl } from '../services/aiVisionService';
  */
 
 export const MAP_CONFIG = {
-  // Đường dẫn PMTiles trực tiếp từ PaiService (Hỗ trợ HTTP 206 Partial Content Range Request từ file 318MB toàn quốc)
+  // Nguồn Vector Tile CDN Đám mây (OpenFreeMap Planet - Bao phủ 100% Việt Nam, miễn phí trọn đời, tải mượt trên 3G/5G/Wi-Fi)
+  CLOUD_VECTOR_TILE_URL: 'https://tiles.openfreemap.org/planet',
+
+  // Style vector trực tiếp từ OpenFreeMap (Tùy chọn)
+  OPENFREEMAP_STYLE_URL: 'https://tiles.openfreemap.org/styles/bright',
+
+  // Đường dẫn PMTiles nội bộ từ PaiService (Tùy chọn khi cần chạy offline hoàn toàn trên máy dev)
   get PMTILES_URL() {
     return `${getAiBaseUrl()}/tiles/vietnam.pmtiles`;
   },

@@ -155,7 +155,7 @@ export default function App() {
 
   const handleNavigateToCamera = () => {
     setSelectedSite(null);
-    setActiveTab('camera');
+    setActiveTab('chat');
   };
 
   const renderContent = () => {
@@ -217,7 +217,10 @@ export default function App() {
         )}
 
         {activeTab === 'chat' && (
-          <ChatScreen activeSite={chatSiteContext} />
+          <ChatScreen
+            activeSite={chatSiteContext}
+            onNavigateToMap={handleNavigateToMap}
+          />
         )}
 
         {activeTab === 'profile' && (
@@ -228,7 +231,7 @@ export default function App() {
         )}
       </View>
 
-      {/* Modern Floating Bottom Navigation Bar (Tự động ẩn khi bàn phím bật) */}
+      {/* Modern Floating Bottom Navigation Bar (4 Tab Thanh Lịch, Cân Xứng) */}
       {!isKeyboardVisible && (
         <View style={styles.bottomNavContainer}>
           {/* Tab 1: Khám phá */}
@@ -273,32 +276,7 @@ export default function App() {
             </Text>
           </TouchableOpacity>
 
-          {/* Tab 3: Quét AI (Prominent Center Button) */}
-          <TouchableOpacity
-            style={styles.navItemCamera}
-            onPress={() => setActiveTab('camera')}
-            activeOpacity={0.85}
-          >
-            <View
-              style={[
-                styles.cameraCircle,
-                activeTab === 'camera' && styles.cameraCircleActive,
-              ]}
-            >
-              <Ionicons name="scan-outline" size={26} color="#FFF" />
-            </View>
-            <Text
-              style={[
-                styles.navLabel,
-                activeTab === 'camera' && styles.navLabelActive,
-                { marginTop: 2 },
-              ]}
-            >
-              {t('nav.camera')}
-            </Text>
-          </TouchableOpacity>
-
-          {/* Tab 4: Hướng dẫn viên AI */}
+          {/* Tab 3: Cố vấn AI (Chatbot & Nhận diện ảnh) */}
           <TouchableOpacity
             style={styles.navItem}
             onPress={() => setActiveTab('chat')}
@@ -319,7 +297,7 @@ export default function App() {
             </Text>
           </TouchableOpacity>
 
-          {/* Tab 5: Hồ sơ */}
+          {/* Tab 4: Tài khoản */}
           <TouchableOpacity
             style={styles.navItem}
             onPress={() => setActiveTab('profile')}
