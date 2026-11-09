@@ -24,11 +24,16 @@ public class HeritageResponseDTO {
     private Double longitude;
     private String imageUrl;
     private Double distance; // Khoảng cách tính bằng km (làm tròn 2 chữ số thập phân)
+    private java.util.List<String> galleryImages; // Danh sách ảnh gallery bổ sung
 
     public HeritageResponseDTO() {
     }
 
     public HeritageResponseDTO(UUID id, String name, String description, String category, String province, String address, Double latitude, Double longitude, String imageUrl, Double distance) {
+        this(id, name, description, category, province, address, latitude, longitude, imageUrl, distance, null);
+    }
+
+    public HeritageResponseDTO(UUID id, String name, String description, String category, String province, String address, Double latitude, Double longitude, String imageUrl, Double distance, java.util.List<String> galleryImages) {
         this.id = id;
         this.name = name;
         this.description = description;
@@ -39,6 +44,7 @@ public class HeritageResponseDTO {
         this.longitude = longitude;
         this.imageUrl = imageUrl;
         this.distance = distance;
+        this.galleryImages = galleryImages;
     }
 
     public static HeritageResponseDTO fromEntity(HeritageInfo entity) {

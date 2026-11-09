@@ -60,13 +60,9 @@ public class SecurityConfig {
                 // Cho phép preflight requests (CORS OPTIONS)
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                // Public APIs: Tra cứu di sản, món ăn
-                .requestMatchers(
-                    "/api/heritage/all",
-                    "/api/heritage/search",
-                    "/api/heritage/search/**"
-                ).permitAll()
+                // Public APIs: Tra cứu di sản và chỉ đường bản đồ (hỗ trợ cả khách vãng lai Guest)
                 .requestMatchers(HttpMethod.GET, "/api/heritage/**").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/routes").permitAll()
 
                 // Swagger / OpenAPI documentation
                 .requestMatchers(
@@ -80,11 +76,12 @@ public class SecurityConfig {
                 // Endpoints hệ thống cơ bản
                 .requestMatchers("/error").permitAll()
 
-                // Private APIs: Tương tác, người dùng, AI Chatbot (Bắt buộc xác thực)
+                // Private APIs: Tương tác, người dùng, AI Chatbot, Lịch sử chat (Bắt buộc xác thực)
                 .requestMatchers(
                     "/api/interactions/**",
                     "/api/users/**",
-                    "/api/ai/**"
+                    "/api/ai/**",
+                    "/api/chat/**"
                 ).authenticated()
 
                 // Mọi request còn lại bắt buộc phải xác thực

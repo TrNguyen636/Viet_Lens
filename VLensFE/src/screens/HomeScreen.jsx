@@ -13,17 +13,17 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import { THEME } from '../utils/theme';
+import { THEME, useTheme } from '../utils/theme';
 import appService from '../api/appService';
 import { adaptHeritageList, DEFAULT_HERITAGE_IMAGE } from '../utils/heritageAdapter';
-import LanguageSwitcher from '../components/LanguageSwitcher';
 import useUserLocation from '../hooks/useUserLocation';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.72;
 
-export default function HomeScreen({ user, onSelectSite, onNavigateToCamera, onNavigateToMap }) {
-  const { t } = useTranslation();
+export default function HomeScreen({ user, onSelectSite, onNavigateToCamera, onNavigateToMap, onNavigateToProfile }) {
+  const { t, i18n } = useTranslation();
+  const { theme, isDark } = useTheme();
   const [search, setSearch] = useState('');
   const { coords: userCoords } = useUserLocation();
 
@@ -54,12 +54,15 @@ export default function HomeScreen({ user, onSelectSite, onNavigateToCamera, onN
         masterSitesRef.current = adapted;
         setAllSites(adapted);
 
+        let nearby = [];
         if (nearbyRes.status === 'fulfilled' && Array.isArray(nearbyRes.value) && nearbyRes.value.length > 0) {
-          setNearbySites(adaptHeritageList(nearbyRes.value));
-        } else {
-          // Lấy 4 địa danh đầu tiên từ dữ liệu thật
-          setNearbySites(adapted.slice(0, 4));
+          nearby = adaptHeritageList(nearbyRes.value);
         }
+        // Luôn đảm bảo mục nổi bật có tối thiểu 4-6 địa danh, kể cả khi GPS không nằm trong bán kính di tích
+        if (nearby.length === 0 && adapted.length > 0) {
+          nearby = adapted.slice(0, 6);
+        }
+        setNearbySites(nearby);
       } else {
         masterSitesRef.current = [];
         setAllSites([]);
@@ -74,7 +77,7 @@ export default function HomeScreen({ user, onSelectSite, onNavigateToCamera, onN
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [userCoords]);
+  }, [userCoords, i18n?.language]);
 
   useEffect(() => {
     loadHeritageData();
@@ -146,78 +149,86 @@ export default function HomeScreen({ user, onSelectSite, onNavigateToCamera, onN
     return site.imageUrl || site.image || DEFAULT_HERITAGE_IMAGE;
   };
 
+  // Đảm bảo luôn có dữ liệu hiển thị cho Carousel "Di sản nổi bật quanh bạn"
+  const displayNearbySites = useMemo(() => {
+    if (nearbySites && nearbySites.length > 0) return nearbySites;
+    if (allSites && allSites.length > 0) return allSites.slice(0, 6);
+    return [];
+  }, [nearbySites, allSites]);
+
   return (
     <ScrollView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: theme.colors.bg }]}
       showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl
           refreshing={isRefreshing}
           onRefresh={onRefresh}
-          colors={[THEME.colors.red]}
-          tintColor={THEME.colors.red}
+          colors={[theme.colors.red]}
+          tintColor={theme.colors.red}
         />
       }
     >
       {/* Header Chào mừng Người dùng */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Text style={styles.greetingSub}>{t('home.greetingMorning')}</Text>
-          <Text style={styles.greetingName}>
+          <Text style={[styles.greetingSub, { color: theme.colors.inkMuted }]}>{t('home.greetingMorning')}</Text>
+          <Text style={[styles.greetingName, { color: theme.colors.ink }]}>
             {user?.fullName || user?.name || t('home.greetingDefault')} 👋
           </Text>
         </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <LanguageSwitcher onLanguageChanged={() => loadHeritageData()} />
-          <TouchableOpacity style={styles.avatarBtn} onPress={() => {}}>
-            <MaterialCommunityIcons name="account-circle" size={40} color={THEME.colors.amber} />
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={styles.avatarBtn}
+          onPress={onNavigateToProfile}
+          activeOpacity={0.7}
+        >
+          <MaterialCommunityIcons name="account-circle" size={40} color={theme.colors.amber} />
+        </TouchableOpacity>
       </View>
 
       {/* Thanh Tìm Kiếm */}
-      <View style={styles.searchContainer}>
+      <View style={[styles.searchContainer, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
         {isSearching ? (
-          <ActivityIndicator size="small" color={THEME.colors.red} style={styles.searchIcon} />
+          <ActivityIndicator size="small" color={theme.colors.red} style={styles.searchIcon} />
         ) : (
-          <Ionicons name="search-outline" size={20} color={THEME.colors.inkMuted} style={styles.searchIcon} />
+          <Ionicons name="search-outline" size={20} color={theme.colors.inkMuted} style={styles.searchIcon} />
         )}
         <TextInput
-          style={styles.searchInput}
+          style={[styles.searchInput, { color: theme.colors.ink }]}
           placeholder={t('home.searchPlaceholder')}
-          placeholderTextColor={THEME.colors.inkLight}
+          placeholderTextColor={theme.colors.inkLight}
           value={search}
           onChangeText={setSearch}
         />
         {search.length > 0 && (
           <TouchableOpacity onPress={() => setSearch('')} style={{ padding: 4 }}>
-            <Ionicons name="close-circle" size={18} color={THEME.colors.inkMuted} />
+            <Ionicons name="close-circle" size={18} color={theme.colors.inkMuted} />
           </TouchableOpacity>
         )}
         <TouchableOpacity
           onPress={onNavigateToCamera}
-          style={styles.searchCameraBtn}
+          style={[styles.searchCameraBtn, { borderLeftColor: theme.colors.border }]}
           activeOpacity={0.7}
         >
-          <Ionicons name="camera-outline" size={20} color={THEME.colors.red} />
+          <Ionicons name="camera-outline" size={20} color={theme.colors.red} />
         </TouchableOpacity>
       </View>
 
       {/* GPS Featured Carousel: Di sản nổi bật quanh bạn */}
       <View style={styles.sectionRow}>
         <View style={styles.sectionHeader}>
-          <Ionicons name="navigate-circle" size={20} color={THEME.colors.red} />
-          <Text style={styles.sectionTitle}>{t('home.nearbySectionTitle')}</Text>
+          <Ionicons name="navigate-circle" size={20} color={theme.colors.red} />
+          <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>{t('home.nearbySectionTitle')}</Text>
         </View>
         <TouchableOpacity onPress={onNavigateToMap}>
-          <Text style={styles.seeAllText}>{t('home.openMap')}</Text>
+          <Text style={[styles.seeAllText, { color: theme.colors.red }]}>{t('home.openMap')}</Text>
         </TouchableOpacity>
       </View>
 
       {isLoading ? (
         <View style={styles.loadingCarousel}>
-          <ActivityIndicator size="small" color={THEME.colors.red} />
-          <Text style={styles.loadingText}>{t('home.loadingData')}</Text>
+          <ActivityIndicator size="small" color={theme.colors.red} />
+          <Text style={[styles.loadingText, { color: theme.colors.inkMuted }]}>{t('home.loadingData')}</Text>
         </View>
       ) : (
         <ScrollView
@@ -227,30 +238,40 @@ export default function HomeScreen({ user, onSelectSite, onNavigateToCamera, onN
           snapToInterval={CARD_WIDTH + 14}
           decelerationRate="fast"
         >
-          {nearbySites.map((site) => (
+          {displayNearbySites.map((site) => (
             <TouchableOpacity
               key={`nearby-${site.id}`}
-              style={styles.carouselCard}
+              style={[styles.carouselCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
               activeOpacity={0.9}
               onPress={() => onSelectSite(site)}
             >
-              <Image
-                source={{ uri: getImageUri(site) }}
-                style={styles.carouselImage}
-                onError={() => handleImageError(site.id)}
-              />
-              <View style={styles.carouselBadge}>
-                <Text style={styles.carouselBadgeText}>{site.dynasty || site.category}</Text>
+              <View style={styles.carouselImgWrapper}>
+                <Image
+                  source={{ uri: getImageUri(site) }}
+                  style={[styles.carouselImage, { backgroundColor: isDark ? '#26231F' : '#EAE5D9' }]}
+                  resizeMode="cover"
+                  onError={() => handleImageError(site.id)}
+                />
+                <View style={styles.carouselBadge}>
+                  <Text style={styles.carouselBadgeText} numberOfLines={1}>
+                    {site.dynasty || site.category}
+                  </Text>
+                </View>
+                {site.distance != null && (
+                  <View style={styles.carouselDistanceBadge}>
+                    <Ionicons name="navigate" size={10} color="#FFF" />
+                    <Text style={styles.carouselDistanceText}>~{site.distance} km</Text>
+                  </View>
+                )}
               </View>
               <View style={styles.carouselContent}>
-                <Text style={styles.carouselTitle} numberOfLines={1}>
+                <Text style={[styles.carouselTitle, { color: theme.colors.ink }]} numberOfLines={1}>
                   {site.name}
                 </Text>
                 <View style={styles.locationRow}>
-                  <Ionicons name="location-sharp" size={13} color={THEME.colors.amber} />
-                  <Text style={styles.locationText} numberOfLines={1}>
-                    {site.locationName}
-                    {site.distance != null ? ` • ~${site.distance} km` : ' • Đang định vị'}
+                  <Ionicons name="location-sharp" size={13} color={theme.colors.amber} />
+                  <Text style={[styles.locationText, { color: theme.colors.inkMuted }]} numberOfLines={1}>
+                    {site.locationName || site.province || site.address}
                   </Text>
                 </View>
               </View>
@@ -266,20 +287,22 @@ export default function HomeScreen({ user, onSelectSite, onNavigateToCamera, onN
         onPress={onNavigateToCamera}
       >
         <View style={styles.cameraBannerText}>
-          <Text style={styles.bannerTag}>AI VISION CAMERA</Text>
-          <Text style={styles.bannerHeading}>Đang đứng trước một di tích?</Text>
-          <Text style={styles.bannerSub}>Mở máy ảnh nhận diện và nghe thuyết minh ngay</Text>
+          <Text style={styles.bannerTag}>{t('home.cameraBannerTag')}</Text>
+          <Text style={styles.bannerHeading}>{t('home.cameraBannerHeading')}</Text>
+          <Text style={styles.bannerSub}>{t('home.cameraBannerSub')}</Text>
         </View>
         <View style={styles.bannerIconCircle}>
-          <Ionicons name="scan-outline" size={30} color="#FFF" />
+          <Ionicons name="sparkles" size={26} color="#FFF" />
         </View>
       </TouchableOpacity>
 
       {/* Tiêu đề danh sách Di sản */}
       <View style={styles.sectionRow}>
-        <Text style={styles.sectionTitle}>Khám phá di sản</Text>
-        <Text style={{ fontSize: 13, color: THEME.colors.inkMuted }}>
-          {filteredSites.length} di tích
+        <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>
+          {t('home.exploreSectionTitle')}
+        </Text>
+        <Text style={{ fontSize: 13, color: theme.colors.inkMuted }}>
+          {filteredSites.length} {t('home.relicCountUnit')}
         </Text>
       </View>
 
@@ -287,43 +310,79 @@ export default function HomeScreen({ user, onSelectSite, onNavigateToCamera, onN
       <View style={styles.listContainer}>
         {isLoading ? (
           <View style={styles.loadingBox}>
-            <ActivityIndicator size="large" color={THEME.colors.red} />
-            <Text style={styles.loadingBoxText}>Đang nạp hình ảnh và dữ liệu di sản...</Text>
+            <ActivityIndicator size="large" color={theme.colors.red} />
+            <Text style={[styles.loadingBoxText, { color: theme.colors.inkMuted }]}>
+              {t('home.loadingData')}
+            </Text>
           </View>
         ) : filteredSites.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Ionicons name="search" size={44} color={THEME.colors.inkMuted} />
-            <Text style={styles.emptyTitle}>Không tìm thấy di tích phù hợp</Text>
-            <Text style={styles.emptySub}>Thử tìm kiếm với từ khóa khác hoặc chuyển danh mục</Text>
+            <Ionicons name="search" size={44} color={theme.colors.inkMuted} />
+            <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>
+              {t('home.emptySearchTitle')}
+            </Text>
+            <Text style={[styles.emptySub, { color: theme.colors.inkMuted }]}>
+              {t('home.emptySearchSub')}
+            </Text>
           </View>
         ) : (
           filteredSites.map((site) => (
             <TouchableOpacity
               key={`site-${site.id}`}
-              style={styles.siteCard}
-              activeOpacity={0.9}
+              style={[styles.siteCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
+              activeOpacity={0.88}
               onPress={() => onSelectSite(site)}
             >
-              <Image
-                source={{ uri: getImageUri(site) }}
-                style={styles.siteCardImg}
-                onError={() => handleImageError(site.id)}
-              />
+              {/* Cột trái: Khung ảnh khớp khít 100% chiều cao của thẻ */}
+              <View style={styles.siteCardImgContainer}>
+                <Image
+                  source={{ uri: getImageUri(site) }}
+                  style={[styles.siteCardImg, { backgroundColor: isDark ? '#26231F' : '#EAE5D9' }]}
+                  resizeMode="cover"
+                  onError={() => handleImageError(site.id)}
+                />
+                {site.distance != null && (
+                  <View style={styles.siteDistanceBadge}>
+                    <Ionicons name="navigate" size={9} color="#FFF" />
+                    <Text style={styles.siteDistanceText}>~{site.distance} km</Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Cột giữa: Thông tin thẻ bố trí thoáng đãng */}
               <View style={styles.siteCardInfo}>
                 <View style={styles.siteTopRow}>
-                  <Text style={styles.siteDynasty}>{site.dynasty || site.category}</Text>
-                  <View style={styles.ratingBadge}>
-                    <Ionicons name="star" size={11} color="#FFF" />
-                    <Text style={styles.ratingText}>4.9</Text>
+                  <View style={[styles.dynastyPillTag, { backgroundColor: isDark ? '#2D2820' : theme.colors.parchment }]}>
+                    <Text style={[styles.siteDynasty, { color: theme.colors.amber }]} numberOfLines={1}>
+                      {site.dynasty || site.category}
+                    </Text>
                   </View>
+                  {site.province ? (
+                    <Text style={[styles.siteProvinceBadge, { color: theme.colors.inkMuted }]} numberOfLines={1}>
+                      {site.province}
+                    </Text>
+                  ) : null}
                 </View>
-                <Text style={styles.siteName}>{site.name}</Text>
-                <Text style={styles.siteLocation}>
-                  <Ionicons name="location-outline" size={12} color={THEME.colors.inkMuted} /> {site.locationName}
+
+                <Text style={[styles.siteName, { color: theme.colors.ink }]} numberOfLines={1}>
+                  {site.name}
                 </Text>
-                <Text style={styles.siteBrief} numberOfLines={2}>
+
+                <View style={styles.siteLocationRow}>
+                  <Ionicons name="location-sharp" size={12} color={theme.colors.red} />
+                  <Text style={[styles.siteLocation, { color: theme.colors.inkMuted }]} numberOfLines={1}>
+                    {site.locationName || site.address}
+                  </Text>
+                </View>
+
+                <Text style={[styles.siteBrief, { color: theme.colors.inkLight }]} numberOfLines={2}>
                   {site.shortDescription || site.description}
                 </Text>
+              </View>
+
+              {/* Cột phải: Mũi tên khám phá nhẹ nhàng */}
+              <View style={styles.cardArrowCol}>
+                <Ionicons name="chevron-forward" size={16} color={theme.colors.border} />
               </View>
             </TouchableOpacity>
           ))
@@ -433,7 +492,7 @@ const styles = StyleSheet.create({
   },
   carouselCard: {
     width: CARD_WIDTH,
-    height: 190,
+    height: 195,
     borderRadius: 18,
     backgroundColor: '#FFF',
     marginRight: 14,
@@ -446,30 +505,57 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 4,
   },
+  carouselImgWrapper: {
+    width: '100%',
+    height: 125,
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: '#EAE5D9',
+  },
   carouselImage: {
     width: '100%',
-    height: 118,
+    height: 125,
     backgroundColor: '#EAE5D9',
   },
   carouselBadge: {
     position: 'absolute',
-    top: 10,
-    left: 10,
-    backgroundColor: 'rgba(28, 25, 23, 0.75)',
+    top: 8,
+    left: 8,
+    backgroundColor: 'rgba(28, 25, 23, 0.78)',
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingVertical: 3.5,
+    borderRadius: 7,
+    maxWidth: '65%',
   },
   carouselBadgeText: {
     color: '#FFF',
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '600',
   },
+  carouselDistanceBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(198, 40, 40, 0.9)',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 7,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  carouselDistanceText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '700',
+  },
   carouselContent: {
-    padding: 10,
+    height: 68,
+    paddingHorizontal: 12,
+    justifyContent: 'center',
   },
   carouselTitle: {
-    fontSize: 15,
+    fontSize: 14.5,
     fontWeight: '700',
     color: THEME.colors.ink,
   },
@@ -477,10 +563,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 4,
+    marginTop: 3,
   },
   locationText: {
-    fontSize: 12,
+    fontSize: 11.5,
     color: THEME.colors.inkMuted,
   },
   cameraBanner: {
@@ -527,33 +613,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  catList: {
-    paddingLeft: 20,
-    paddingRight: 10,
-    paddingVertical: 4,
-  },
-  catChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 20,
-    backgroundColor: '#FFF',
-    marginRight: 10,
-    borderWidth: 1,
-    borderColor: THEME.colors.border,
-  },
-  catChipActive: {
-    backgroundColor: THEME.colors.red,
-    borderColor: THEME.colors.red,
-  },
-  catText: {
-    fontSize: 13,
-    color: THEME.colors.ink,
-    fontWeight: '500',
-  },
-  catTextActive: {
-    color: '#FFF',
-    fontWeight: '700',
-  },
   listContainer: {
     paddingHorizontal: 20,
     marginTop: 14,
@@ -584,6 +643,7 @@ const styles = StyleSheet.create({
   },
   siteCard: {
     flexDirection: 'row',
+    height: 116,
     backgroundColor: '#FFF',
     borderRadius: 16,
     marginBottom: 12,
@@ -596,55 +656,84 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 3,
   },
-  siteCardImg: {
-    width: 105,
-    height: 105,
+  siteCardImgContainer: {
+    width: 110,
+    height: 116,
+    position: 'relative',
     backgroundColor: '#EAE5D9',
+    overflow: 'hidden',
+  },
+  siteCardImg: {
+    width: 110,
+    height: 116,
+    backgroundColor: '#EAE5D9',
+  },
+  siteDistanceBadge: {
+    position: 'absolute',
+    bottom: 6,
+    left: 6,
+    backgroundColor: 'rgba(28, 25, 23, 0.78)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  siteDistanceText: {
+    color: '#FFF',
+    fontSize: 9.5,
+    fontWeight: '700',
   },
   siteCardInfo: {
     flex: 1,
-    padding: 10,
-    justifyContent: 'center',
+    height: 116,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    justifyContent: 'space-between',
   },
   siteTopRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 6,
+  },
+  dynastyPillTag: {
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+    maxWidth: '65%',
   },
   siteDynasty: {
-    fontSize: 11,
-    color: THEME.colors.amber,
-    fontWeight: '600',
-  },
-  ratingBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: THEME.colors.amber,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    borderRadius: 6,
-    gap: 2,
-  },
-  ratingText: {
-    color: '#FFF',
     fontSize: 10,
     fontWeight: '700',
   },
+  siteProvinceBadge: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
   siteName: {
-    fontSize: 15,
+    fontSize: 14.5,
     fontWeight: '700',
     color: THEME.colors.ink,
-    marginTop: 2,
+  },
+  siteLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
   },
   siteLocation: {
-    fontSize: 12,
+    fontSize: 11,
     color: THEME.colors.inkMuted,
-    marginTop: 2,
+    flex: 1,
   },
   siteBrief: {
-    fontSize: 12,
+    fontSize: 11,
     color: THEME.colors.inkLight,
-    marginTop: 4,
-    lineHeight: 16,
+    lineHeight: 15,
+  },
+  cardArrowCol: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingRight: 8,
   },
 });

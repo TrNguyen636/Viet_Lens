@@ -44,7 +44,21 @@ Data For Training/**/*.jpg
 Data For Training/**/*.jpeg
 Data For Training/**/*.png
 
-# Agent skills cache & backup folders
+# Agent skills cache, local AI/IDE configs & backup folders
 .agents/
+.codegraph/
+.gemini/
+GEMINI.md
+pyproject.toml
+pyrefly.toml
 skills-lock.json
 .git_fe_backup/
+
+# Local crawling data (keep locally, do not push to remote)
+CrawlingData/
+
+# Large archives & Kotlin compiler error logs
+*.zip
+VLensFE/android/.kotlin/errors/
+**/credentials.txt
+**/*.jks

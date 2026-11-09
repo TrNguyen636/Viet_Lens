@@ -17,7 +17,7 @@ import java.util.UUID;
 @Entity
 @Builder
 @Table(name = "saved_places", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_saved_place_user_heritage", columnNames = {"user_id", "heritage_id"})
+        @UniqueConstraint(name = "saved_places_user_id_heritage_id_key", columnNames = {"user_id", "heritage_id"})
 })
 public class SavedPlaceEntity {
 

@@ -107,6 +107,18 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiErrorResponse> handleGenericException(
             Exception ex, HttpServletRequest request) {
+        // Bỏ qua việc in stack trace lỗi nếu người dùng đóng app, reload trang hoặc ngắt kết nối sớm (ClientAbortException / Connection reset)
+        Throwable cause = ex;
+        while (cause != null) {
+            String causeName = cause.getClass().getSimpleName();
+            String causeMsg = cause.getMessage() != null ? cause.getMessage() : "";
+            if ("ClientAbortException".equals(causeName) || causeMsg.contains("Connection reset by peer") || causeMsg.contains("Broken pipe")) {
+                log.info("ℹ️ Client (Điện thoại/Trình duyệt) đã ngắt kết nối trước khi server gửi xong phản hồi tại {}", request.getRequestURI());
+                return null;
+            }
+            cause = cause.getCause();
+        }
+
         log.error("Lỗi hệ thống chưa được kiểm soát tại {}: ", request.getRequestURI(), ex);
         ApiErrorResponse error = ApiErrorResponse.of(
                 HttpStatus.INTERNAL_SERVER_ERROR.value(),

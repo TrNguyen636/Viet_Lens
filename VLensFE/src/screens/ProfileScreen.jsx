@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,18 +10,40 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import { THEME } from '../utils/theme';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { THEME, useTheme } from '../utils/theme';
 import { changeAppLanguage } from '../locales/i18n';
 import appService from '../api/appService';
 
+const AUTOPLAY_STORAGE_KEY = '@vietlens_autoplay_audio';
+
 export default function ProfileScreen({ user, onLogout }) {
   const { t, i18n } = useTranslation();
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const { theme, isDark, toggleTheme } = useTheme();
   const [showContactModal, setShowContactModal] = useState(false);
   const [savedCount, setSavedCount] = useState(0);
+  const [autoPlayAudio, setAutoPlayAudio] = useState(false);
+
+  // Khôi phục cài đặt Tự động phát Audio Guide từ AsyncStorage
+  useEffect(() => {
+    AsyncStorage.getItem(AUTOPLAY_STORAGE_KEY)
+      .then((val) => {
+        if (val !== null) {
+          setAutoPlayAudio(val === 'true');
+        }
+      })
+      .catch((err) => {
+        console.warn('[ProfileScreen] Lỗi đọc autoplay setting:', err.message);
+      });
+  }, []);
+
+  const handleToggleAutoPlay = async (value) => {
+    setAutoPlayAudio(value);
+    await AsyncStorage.setItem(AUTOPLAY_STORAGE_KEY, value ? 'true' : 'false').catch(() => {});
+  };
 
   // Tải số lượng di sản đã lưu từ backend
-  React.useEffect(() => {
+  useEffect(() => {
     let isMounted = true;
     const fetchBookmarkCount = async () => {
       try {
@@ -40,109 +62,114 @@ export default function ProfileScreen({ user, onLogout }) {
   }, []);
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={[styles.container, { backgroundColor: theme.colors.bg }]}
+      showsVerticalScrollIndicator={false}
+    >
       {/* Profile Header */}
       <View style={styles.header}>
-        <View style={styles.avatarCircle}>
+        <View style={[styles.avatarCircle, { backgroundColor: theme.colors.amber, borderColor: theme.colors.card }]}>
           <Text style={styles.avatarInitial}>
             {(user?.fullName || user?.name || 'V')[0].toUpperCase()}
           </Text>
         </View>
-        <Text style={styles.userName}>{user?.fullName || user?.name || 'Người dùng VietLens'}</Text>
-        <Text style={styles.userEmail}>{user?.email || 'Chưa liên kết email'}</Text>
-        <View style={styles.rankBadge}>
-          <MaterialCommunityIcons name="seal" size={14} color={THEME.colors.amber} />
-          <Text style={styles.rankBadgeText}>
-            {user?.role || 'Nhà Thám Hiểm Văn Hóa'}
+        <Text style={[styles.userName, { color: theme.colors.ink }]}>
+          {user?.fullName || user?.name || t('profile.defaultUserName')}
+        </Text>
+        <Text style={[styles.userEmail, { color: theme.colors.inkMuted }]}>
+          {user?.email || t('profile.noEmail')}
+        </Text>
+        <View style={[styles.rankBadge, { backgroundColor: theme.colors.parchment, borderColor: theme.colors.border }]}>
+          <MaterialCommunityIcons name="seal" size={14} color={theme.colors.amber} />
+          <Text style={[styles.rankBadgeText, { color: theme.colors.ink }]}>
+            {user?.role || t('profile.defaultRole')}
           </Text>
         </View>
       </View>
 
-      {/* Stats Counter Row */}
-      <View style={styles.statsCard}>
+      {/* Stats Counter Row: Chỉ hiển thị Di sản đã lưu thật */}
+      <View style={[styles.statsCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
         <View style={styles.statCol}>
-          <Text style={styles.statNumber}>{savedCount}</Text>
-          <Text style={styles.statLabel}>Di sản đã lưu</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statCol}>
-          <Text style={styles.statNumber}>{savedCount > 0 ? 3 : 1}</Text>
-          <Text style={styles.statLabel}>Huy hiệu Tem</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statCol}>
-          <Text style={styles.statNumber}>{savedCount * 100 + 500}</Text>
-          <Text style={styles.statLabel}>Điểm văn hóa</Text>
+          <Ionicons name="bookmark" size={26} color={theme.colors.red} style={{ marginBottom: 4 }} />
+          <Text style={[styles.statNumber, { color: theme.colors.amber }]}>{savedCount}</Text>
+          <Text style={[styles.statLabel, { color: theme.colors.inkMuted }]}>{t('profile.savedCountLabel')}</Text>
         </View>
       </View>
 
       {/* Settings Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionHeader}>CÀI ĐẶT ỨNG DỤNG</Text>
+      <View style={[styles.section, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+        <Text style={[styles.sectionHeader, { color: theme.colors.inkLight }]}>{t('profile.appSettingsHeader')}</Text>
 
         {/* Language */}
         <TouchableOpacity
-          style={styles.settingRow}
+          style={[styles.settingRow, { borderBottomColor: theme.colors.border }]}
           onPress={async () => {
-            const nextLang = i18n.language === 'vi' ? 'en' : 'vi';
+            const nextLang = i18n.language === 'vi' ? 'en' : (i18n.language === 'en' ? 'ja' : 'vi');
             await changeAppLanguage(nextLang);
           }}
         >
           <View style={styles.settingLeft}>
-            <Ionicons name="language" size={20} color={THEME.colors.amber} />
-            <Text style={styles.settingLabel}>{t('profile.language')}</Text>
+            <Ionicons name="language" size={20} color={theme.colors.amber} />
+            <Text style={[styles.settingLabel, { color: theme.colors.ink }]}>{t('profile.language')}</Text>
           </View>
-          <Text style={styles.settingValue}>
-            {i18n.language === 'en' ? '🇬🇧 English' : '🇻🇳 Tiếng Việt'}
+          <Text style={[styles.settingValue, { color: theme.colors.amber }]}>
+            {i18n.language === 'ja' ? '🇯🇵 日本語' : (i18n.language === 'en' ? '🇬🇧 English' : '🇻🇳 Tiếng Việt')}
           </Text>
         </TouchableOpacity>
 
         {/* Dark Mode */}
-        <View style={styles.settingRow}>
+        <View style={[styles.settingRow, { borderBottomColor: theme.colors.border }]}>
           <View style={styles.settingLeft}>
-            <Ionicons name="moon-outline" size={20} color={THEME.colors.amber} />
-            <Text style={styles.settingLabel}>Giao diện Tối (Dark Mode)</Text>
+            <Ionicons name="moon-outline" size={20} color={theme.colors.amber} />
+            <Text style={[styles.settingLabel, { color: theme.colors.ink }]}>{t('profile.darkMode')}</Text>
           </View>
           <Switch
-            value={isDarkMode}
-            onValueChange={setIsDarkMode}
-            trackColor={{ false: THEME.colors.border, true: THEME.colors.amber }}
+            value={isDark}
+            onValueChange={toggleTheme}
+            trackColor={{ false: theme.colors.border, true: theme.colors.amber }}
             thumbColor="#FFF"
           />
         </View>
 
         {/* Audio auto-play */}
-        <View style={styles.settingRow}>
+        <View style={[styles.settingRow, { borderBottomColor: theme.colors.border }]}>
           <View style={styles.settingLeft}>
-            <Ionicons name="volume-high-outline" size={20} color={THEME.colors.amber} />
-            <Text style={styles.settingLabel}>Tự động phát Audio Guide khi quét</Text>
+            <Ionicons name="volume-high-outline" size={20} color={theme.colors.amber} />
+            <Text style={[styles.settingLabel, { color: theme.colors.ink }]}>{t('profile.autoPlayAudio')}</Text>
           </View>
           <Switch
-            value={true}
-            trackColor={{ false: THEME.colors.border, true: THEME.colors.amber }}
+            value={autoPlayAudio}
+            onValueChange={handleToggleAutoPlay}
+            trackColor={{ false: theme.colors.border, true: theme.colors.amber }}
             thumbColor="#FFF"
           />
         </View>
       </View>
 
       {/* Support & About */}
-      <View style={styles.section}>
-        <Text style={styles.sectionHeader}>THÔNG TIN & HỖ TRỢ</Text>
+      <View style={[styles.section, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+        <Text style={[styles.sectionHeader, { color: theme.colors.inkLight }]}>{t('profile.supportHeader')}</Text>
 
-        <TouchableOpacity style={styles.settingRow} onPress={() => Alert.alert('VietLens', 'Dự án Bảo tồn Di sản Văn hóa Việt Nam')}>
+        <TouchableOpacity
+          style={[styles.settingRow, { borderBottomColor: theme.colors.border }]}
+          onPress={() => Alert.alert('VietLens', t('profile.aboutProjectDesc'))}
+        >
           <View style={styles.settingLeft}>
-            <Ionicons name="information-circle-outline" size={20} color={THEME.colors.inkMuted} />
-            <Text style={styles.settingLabel}>Về dự án VietLens</Text>
+            <Ionicons name="information-circle-outline" size={20} color={theme.colors.inkMuted} />
+            <Text style={[styles.settingLabel, { color: theme.colors.ink }]}>{t('profile.aboutProject')}</Text>
           </View>
-          <Ionicons name="chevron-forward" size={16} color={THEME.colors.inkLight} />
+          <Ionicons name="chevron-forward" size={16} color={theme.colors.inkLight} />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.settingRow} onPress={() => setShowContactModal(true)}>
+        <TouchableOpacity
+          style={[styles.settingRow, { borderBottomColor: theme.colors.border }]}
+          onPress={() => setShowContactModal(true)}
+        >
           <View style={styles.settingLeft}>
-            <Ionicons name="help-buoy-outline" size={20} color={THEME.colors.amber} />
-            <Text style={styles.settingLabel}>Liên hệ hỗ trợ & Góp ý di sản</Text>
+            <Ionicons name="help-buoy-outline" size={20} color={theme.colors.amber} />
+            <Text style={[styles.settingLabel, { color: theme.colors.ink }]}>{t('profile.contactFeedback')}</Text>
           </View>
-          <Ionicons name="chevron-forward" size={16} color={THEME.colors.inkLight} />
+          <Ionicons name="chevron-forward" size={16} color={theme.colors.inkLight} />
         </TouchableOpacity>
 
         {/* Logout */}
@@ -150,12 +177,12 @@ export default function ProfileScreen({ user, onLogout }) {
           style={[styles.settingRow, { borderBottomWidth: 0 }]}
           onPress={() => {
             Alert.alert(
-              'Xác nhận đăng xuất',
-              'Bạn có chắc chắn muốn đăng xuất khỏi tài khoản VietLens?',
+              t('profile.logoutConfirmTitle'),
+              t('profile.logoutConfirmMsg'),
               [
-                { text: 'Hủy', style: 'cancel' },
+                { text: t('common.cancel'), style: 'cancel' },
                 {
-                  text: 'Đăng xuất',
+                  text: t('profile.logoutBtn'),
                   style: 'destructive',
                   onPress: onLogout,
                 },
@@ -164,8 +191,8 @@ export default function ProfileScreen({ user, onLogout }) {
           }}
         >
           <View style={styles.settingLeft}>
-            <Ionicons name="log-out-outline" size={20} color={THEME.colors.red} />
-            <Text style={[styles.settingLabel, { color: THEME.colors.red }]}>Đăng xuất tài khoản</Text>
+            <Ionicons name="log-out-outline" size={20} color={theme.colors.red} />
+            <Text style={[styles.settingLabel, { color: theme.colors.red }]}>{t('profile.logoutBtn')}</Text>
           </View>
         </TouchableOpacity>
       </View>
@@ -173,46 +200,46 @@ export default function ProfileScreen({ user, onLogout }) {
       {/* Interactive Contact & Feedback Modal */}
       {showContactModal && (
         <View style={styles.modalBackdrop}>
-          <View style={styles.contactModalCard}>
+          <View style={[styles.contactModalCard, { backgroundColor: theme.colors.card }]}>
             <View style={styles.modalHeaderRow}>
-              <Text style={styles.modalTitle}>Liên hệ Ban Quản Trị VietLens</Text>
+              <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>{t('profile.contactModalTitle')}</Text>
               <TouchableOpacity onPress={() => setShowContactModal(false)}>
-                <Ionicons name="close" size={22} color={THEME.colors.inkMuted} />
+                <Ionicons name="close" size={22} color={theme.colors.inkMuted} />
               </TouchableOpacity>
             </View>
-            <Text style={styles.modalDesc}>
-              Đội ngũ nghiên cứu văn hóa luôn sẵn sàng lắng nghe mọi phản hồi và đóng góp tư liệu di sản.
+            <Text style={[styles.modalDesc, { color: theme.colors.inkMuted }]}>
+              {t('profile.contactModalDesc')}
             </Text>
 
-            <View style={styles.contactInfoBox}>
+            <View style={[styles.contactInfoBox, { backgroundColor: theme.colors.parchment, borderColor: theme.colors.border }]}>
               <View style={styles.contactRow}>
-                <Ionicons name="call-outline" size={18} color={THEME.colors.amber} />
-                <Text style={styles.contactRowText}>Hotline: 1900 8866 (08:00 - 20:00)</Text>
+                <Ionicons name="call-outline" size={18} color={theme.colors.amber} />
+                <Text style={[styles.contactRowText, { color: theme.colors.ink }]}>{t('profile.hotline')}</Text>
               </View>
               <View style={styles.contactRow}>
-                <Ionicons name="mail-outline" size={18} color={THEME.colors.red} />
-                <Text style={styles.contactRowText}>Email: contact@vietlens.vn</Text>
+                <Ionicons name="mail-outline" size={18} color={theme.colors.red} />
+                <Text style={[styles.contactRowText, { color: theme.colors.ink }]}>Email: contact@vietlens.vn</Text>
               </View>
               <View style={styles.contactRow}>
-                <Ionicons name="location-outline" size={18} color={THEME.colors.green} />
-                <Text style={styles.contactRowText}>Văn phòng: Trung tâm Bảo tồn Di sản, Hà Nội</Text>
+                <Ionicons name="location-outline" size={18} color={theme.colors.green} />
+                <Text style={[styles.contactRowText, { color: theme.colors.ink }]}>{t('profile.office')}</Text>
               </View>
             </View>
 
             <TouchableOpacity
-              style={styles.sendFeedbackBtn}
+              style={[styles.sendFeedbackBtn, { backgroundColor: theme.colors.amber }]}
               onPress={() => {
                 setShowContactModal(false);
-                Alert.alert('Thành công', 'Cảm ơn bạn! Lời nhắn đóng góp di sản đã được gửi đến ban quản trị.');
+                Alert.alert(t('profile.feedbackSuccessTitle'), t('profile.feedbackSuccessMsg'));
               }}
             >
-              <Text style={styles.sendFeedbackBtnText}>Gửi Tin Nhắn Nhanh</Text>
+              <Text style={styles.sendFeedbackBtnText}>{t('profile.sendFeedbackBtn')}</Text>
             </TouchableOpacity>
           </View>
         </View>
       )}
 
-      <Text style={styles.versionFooter}>VietLens Phiên bản 1.0.0 (Expo React Native)</Text>
+      <Text style={[styles.versionFooter, { color: theme.colors.inkLight }]}>{t('profile.version')}</Text>
       <View style={{ height: 100 }} />
     </ScrollView>
   );
@@ -273,32 +300,29 @@ const styles = StyleSheet.create({
     color: THEME.colors.ink,
   },
   statsCard: {
-    flexDirection: 'row',
     backgroundColor: '#FFF',
     marginHorizontal: 20,
     borderRadius: 16,
-    paddingVertical: 16,
+    paddingVertical: 18,
+    paddingHorizontal: 20,
     borderWidth: 1,
     borderColor: THEME.colors.border,
     elevation: 2,
   },
   statCol: {
-    flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   statNumber: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 26,
+    fontWeight: '800',
     color: THEME.colors.amber,
   },
   statLabel: {
-    fontSize: 11,
+    fontSize: 12,
     color: THEME.colors.inkMuted,
-    marginTop: 2,
-  },
-  statDivider: {
-    width: 1,
-    backgroundColor: THEME.colors.border,
+    marginTop: 4,
+    fontWeight: '500',
   },
   section: {
     backgroundColor: '#FFF',
@@ -385,6 +409,8 @@ const styles = StyleSheet.create({
     padding: 12,
     marginTop: 14,
     gap: 10,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
   },
   contactRow: {
     flexDirection: 'row',
@@ -409,4 +435,3 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
-

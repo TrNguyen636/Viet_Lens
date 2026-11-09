@@ -14,57 +14,58 @@ import java.util.UUID;
 @Repository
 public interface HeritageInfoRepository extends JpaRepository<HeritageInfo, UUID> {
 
+    String ALLOWED_CATEGORY_CONDITION = """
+        (h.category IS NULL OR (
+            LOWER(h.category) NOT LIKE '%ẩm thực%' AND
+            LOWER(h.category) NOT LIKE '%am thuc%' AND
+            LOWER(h.category) NOT LIKE '%lễ hội%' AND
+            LOWER(h.category) NOT LIKE '%le hoi%'
+        ))
+    """;
+
+    String KEYWORD_LANG_CONDITION = """
+        (
+            LOWER(h.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR
+            LOWER(h.address) LIKE LOWER(CONCAT('%', :keyword, '%')) OR
+            LOWER(h.description) LIKE LOWER(CONCAT('%', :keyword, '%')) OR
+            LOWER(h.province) LIKE LOWER(CONCAT('%', :keyword, '%')) OR
+            (ht.name IS NOT NULL AND LOWER(ht.name) LIKE LOWER(CONCAT('%', :keyword, '%'))) OR
+            (ht.description IS NOT NULL AND LOWER(ht.description) LIKE LOWER(CONCAT('%', :keyword, '%')))
+        )
+    """;
+
     /**
      * Lấy toàn bộ danh sách di sản hợp lệ (đã lọc trực tiếp trên SQL)
      */
-    @Query("SELECT h FROM HeritageInfo h WHERE " +
-           "(h.category IS NULL OR (" +
-           "LOWER(h.category) NOT LIKE '%ẩm thực%' AND " +
-           "LOWER(h.category) NOT LIKE '%am thuc%' AND " +
-           "LOWER(h.category) NOT LIKE '%lễ hội%' AND " +
-           "LOWER(h.category) NOT LIKE '%le hoi%'))")
+    @Query("SELECT h FROM HeritageInfo h WHERE " + ALLOWED_CATEGORY_CONDITION)
     List<HeritageInfo> findAllAllowed();
 
     /**
      * Lấy danh sách di sản hợp lệ có hỗ trợ phân trang Pageable (Chống nghẽn RAM Heap)
      */
-    @Query("SELECT h FROM HeritageInfo h WHERE " +
-           "(h.category IS NULL OR (" +
-           "LOWER(h.category) NOT LIKE '%ẩm thực%' AND " +
-           "LOWER(h.category) NOT LIKE '%am thuc%' AND " +
-           "LOWER(h.category) NOT LIKE '%lễ hội%' AND " +
-           "LOWER(h.category) NOT LIKE '%le hoi%'))")
+    @Query("SELECT h FROM HeritageInfo h WHERE " + ALLOWED_CATEGORY_CONDITION)
     Page<HeritageInfo> findAllAllowed(Pageable pageable);
 
     /**
-     * Tìm kiếm địa danh hợp lệ theo từ khóa (tên, địa chỉ, mô tả, tỉnh thành)
+     * Tìm kiếm địa danh đa ngôn ngữ (tìm kiếm trên cả heritage_info và heritage_translations)
      */
-    @Query("SELECT h FROM HeritageInfo h WHERE " +
-           "((h.category IS NULL OR (" +
-           "LOWER(h.category) NOT LIKE '%ẩm thực%' AND " +
-           "LOWER(h.category) NOT LIKE '%am thuc%' AND " +
-           "LOWER(h.category) NOT LIKE '%lễ hội%' AND " +
-           "LOWER(h.category) NOT LIKE '%le hoi%'))) AND (" +
-           "LOWER(h.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
-           "LOWER(h.address) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
-           "LOWER(h.description) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
-           "LOWER(h.province) LIKE LOWER(CONCAT('%', :keyword, '%')))")
-    List<HeritageInfo> searchAllowedByKeyword(@Param("keyword") String keyword);
+    @Query("SELECT DISTINCT h FROM HeritageInfo h " +
+           "LEFT JOIN HeritageTranslation ht ON ht.heritageId = h.id AND ht.languageCode = :lang " +
+           "WHERE " + ALLOWED_CATEGORY_CONDITION + " AND " + KEYWORD_LANG_CONDITION)
+    List<HeritageInfo> searchAllowedByKeywordAndLang(@Param("keyword") String keyword, @Param("lang") String lang);
 
     /**
-     * Tìm kiếm địa danh có phân trang
+     * Tìm kiếm địa danh đa ngôn ngữ có phân trang
      */
-    @Query("SELECT h FROM HeritageInfo h WHERE " +
-           "((h.category IS NULL OR (" +
-           "LOWER(h.category) NOT LIKE '%ẩm thực%' AND " +
-           "LOWER(h.category) NOT LIKE '%am thuc%' AND " +
-           "LOWER(h.category) NOT LIKE '%lễ hội%' AND " +
-           "LOWER(h.category) NOT LIKE '%le hoi%'))) AND (" +
-           "LOWER(h.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
-           "LOWER(h.address) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
-           "LOWER(h.description) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
-           "LOWER(h.province) LIKE LOWER(CONCAT('%', :keyword, '%')))")
-    Page<HeritageInfo> searchAllowedByKeyword(@Param("keyword") String keyword, Pageable pageable);
+    @Query(
+        value = "SELECT DISTINCT h FROM HeritageInfo h " +
+                "LEFT JOIN HeritageTranslation ht ON ht.heritageId = h.id AND ht.languageCode = :lang " +
+                "WHERE " + ALLOWED_CATEGORY_CONDITION + " AND " + KEYWORD_LANG_CONDITION,
+        countQuery = "SELECT COUNT(DISTINCT h) FROM HeritageInfo h " +
+                     "LEFT JOIN HeritageTranslation ht ON ht.heritageId = h.id AND ht.languageCode = :lang " +
+                     "WHERE " + ALLOWED_CATEGORY_CONDITION + " AND " + KEYWORD_LANG_CONDITION
+    )
+    Page<HeritageInfo> searchAllowedByKeywordAndLang(@Param("keyword") String keyword, @Param("lang") String lang, Pageable pageable);
 
 
     /**
@@ -115,6 +116,29 @@ public interface HeritageInfoRepository extends JpaRepository<HeritageInfo, UUID
             @Param("minLng") double minLng,
             @Param("maxLng") double maxLng,
             @Param("radius") double radius,
+            @Param("limit") int limit
+    );
+
+    /**
+     * Lấy danh sách địa danh trong khung nhìn Bounding Box phục vụ Google Maps (Bước 3)
+     */
+    @Query(value = """
+        SELECT h.* FROM heritage_info h
+        WHERE h.latitude BETWEEN :minLat AND :maxLat
+          AND h.longitude BETWEEN :minLng AND :maxLng
+          AND (h.category IS NULL OR (
+              LOWER(h.category) NOT LIKE '%ẩm thực%'
+              AND LOWER(h.category) NOT LIKE '%am thuc%'
+              AND LOWER(h.category) NOT LIKE '%lễ hội%'
+              AND LOWER(h.category) NOT LIKE '%le hoi%'
+          ))
+        LIMIT :limit
+        """, nativeQuery = true)
+    List<HeritageInfo> findByBoundingBox(
+            @Param("minLat") double minLat,
+            @Param("minLng") double minLng,
+            @Param("maxLat") double maxLat,
+            @Param("maxLng") double maxLng,
             @Param("limit") int limit
     );
 }

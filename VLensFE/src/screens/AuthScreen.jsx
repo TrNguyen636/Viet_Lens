@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,11 +15,16 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import { THEME } from '../utils/theme';
 import { supabase } from '../services/supabase';
 import appService from '../api/appService';
 
 const { width } = Dimensions.get('window');
+
+// Đóng browser session nếu redirect quay trở lại ứng dụng
+WebBrowser.maybeCompleteAuthSession();
 
 export default function AuthScreen({ onLoginSuccess }) {
   // 'login' | 'register'
@@ -35,7 +40,16 @@ export default function AuthScreen({ onLoginSuccess }) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+
+  // Khởi động trước browser engine để giảm độ trễ khi mở Google OAuth
+  useEffect(() => {
+    WebBrowser.warmUpAsync();
+    return () => {
+      WebBrowser.coolDownAsync();
+    };
+  }, []);
 
   // Chuyển đổi tab Đăng nhập / Đăng ký
   const switchMode = (mode) => {
@@ -47,7 +61,7 @@ export default function AuthScreen({ onLoginSuccess }) {
   const translateSupabaseError = (err) => {
     const msg = err?.message || '';
     if (msg.includes('Invalid login credentials')) {
-      return 'Email hoặc mật khẩu không chính xác. Vui lòng thử lại!';
+      return 'Email hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại!';
     }
     if (msg.includes('Email not confirmed')) {
       return 'Tài khoản chưa được kích hoạt qua email. Vui lòng kiểm tra hộp thư của bạn!';
@@ -58,11 +72,46 @@ export default function AuthScreen({ onLoginSuccess }) {
     if (msg.includes('Password should be at least')) {
       return 'Mật khẩu phải chứa ít nhất 6 ký tự!';
     }
+    if (msg.includes('access_denied') || msg.includes('access blocked')) {
+      return 'Xác thực Google bị từ chối hoặc tài khoản chưa được cấp quyền trong Google Cloud Console.';
+    }
     return msg || 'Có lỗi xảy ra trong quá trình xác thực.';
   };
 
   // ==========================================
-  // Xử lý ĐĂNG NHẬP (Sign In)
+  // Hàm dùng chung: Đồng bộ hồ sơ & Hoàn tất Đăng nhập
+  // ==========================================
+  const syncAndCompleteLogin = async (user, accessToken) => {
+    const cleanEmail = user.email || '';
+    const initialUser = {
+      id: user.id,
+      name: user.user_metadata?.full_name || user.user_metadata?.name || cleanEmail.split('@')[0] || 'Du khách',
+      email: cleanEmail,
+      avatarUrl: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
+      role: 'USER',
+    };
+
+    // Đưa người dùng vào ứng dụng ngay lập tức
+    onLoginSuccess(initialUser);
+
+    // Đồng bộ hồ sơ sang Spring Boot Backend (chạy ngầm, không chặn UI)
+    try {
+      const userProfile = await appService.syncUserProfile({
+        token: accessToken,
+        fullName: initialUser.name,
+        avatarUrl: initialUser.avatarUrl,
+      });
+      if (userProfile) {
+        console.log('[AuthScreen] Hồ sơ Backend đã đồng bộ:', userProfile);
+        onLoginSuccess(userProfile);
+      }
+    } catch (syncErr) {
+      console.log('[AuthScreen] Backend sync warning (tiếp tục phiên làm việc):', syncErr.message);
+    }
+  };
+
+  // ==========================================
+  // Xử lý ĐĂNG NHẬP BẰNG EMAIL / PASSWORD
   // ==========================================
   const handleSignIn = async () => {
     const cleanEmail = email.trim();
@@ -75,40 +124,16 @@ export default function AuthScreen({ onLoginSuccess }) {
     setErrorMessage('');
 
     try {
-      // 1. Gọi Supabase Auth để xác thực người dùng
       const { data, error } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password: password,
       });
 
       if (error) throw error;
+      if (!data.user) throw new Error('Không nhận được thông tin người dùng từ Supabase.');
 
-      console.log('Đăng nhập Supabase thành công:', data.user?.id);
-
-      // 2. Hoàn tất đăng nhập và chuyển vào ứng dụng ngay lập tức (không bị nghẽn bởi backend)
-      const initialUser = {
-        id: data.user.id,
-        name: data.user.user_metadata?.full_name || cleanEmail.split('@')[0],
-        email: data.user.email,
-        role: 'USER',
-      };
-      onLoginSuccess(initialUser);
-
-      // 3. Tự động đồng bộ với Backend Spring Boot ở chế độ chạy ngầm (non-blocking)
-      appService
-        .syncUserProfile({
-          token: data.session?.access_token,
-          fullName: data.user?.user_metadata?.full_name || cleanEmail.split('@')[0],
-        })
-        .then((userProfile) => {
-          if (userProfile) {
-            console.log('[AuthScreen] Đồng bộ hồ sơ Backend thành công:', userProfile);
-            onLoginSuccess(userProfile);
-          }
-        })
-        .catch((syncErr) => {
-          console.log('[AuthScreen] Backend chưa phản hồi (tiếp tục dùng thông tin session):', syncErr.message);
-        });
+      console.log('Đăng nhập Supabase thành công:', data.user.id);
+      await syncAndCompleteLogin(data.user, data.session?.access_token);
     } catch (err) {
       const msg = translateSupabaseError(err);
       setErrorMessage(msg);
@@ -119,7 +144,7 @@ export default function AuthScreen({ onLoginSuccess }) {
   };
 
   // ==========================================
-  // Xử lý ĐĂNG KÝ (Sign Up)
+  // Xử lý ĐĂNG KÝ TÀI KHOẢN MỚI
   // ==========================================
   const handleSignUp = async () => {
     const cleanEmail = email.trim();
@@ -144,7 +169,6 @@ export default function AuthScreen({ onLoginSuccess }) {
     setErrorMessage('');
 
     try {
-      // 1. Gọi Supabase Auth để tạo tài khoản mới
       const { data, error } = await supabase.auth.signUp({
         email: cleanEmail,
         password: password,
@@ -156,30 +180,14 @@ export default function AuthScreen({ onLoginSuccess }) {
       });
 
       if (error) throw error;
-
       console.log('Đăng ký tài khoản Supabase thành công:', data.user?.id);
 
-      // Nếu Supabase trả về session ngay (không bắt xác thực email)
-      if (data.session) {
-        try {
-          await appService.syncUserProfile({
-            token: data.session?.access_token,
-            fullName: cleanName,
-          });
-        } catch (syncErr) {
-          console.warn('Lỗi đồng bộ Backend sau đăng ký:', syncErr.message);
-        }
-
-        Alert.alert('Thành công', 'Chào mừng bạn đến với VietLens!', [
+      // Nếu Supabase trả về session ngay (Auto-confirm hoặc không bật xác thực email)
+      if (data.session && data.user) {
+        Alert.alert('Đăng ký thành công 🎉', 'Chào mừng bạn đến với VietLens!', [
           {
-            text: 'Bắt đầu',
-            onPress: () =>
-              onLoginSuccess({
-                id: data.user.id,
-                name: cleanName,
-                email: cleanEmail,
-                role: 'USER',
-              }),
+            text: 'Bắt đầu khám phá',
+            onPress: () => syncAndCompleteLogin(data.user, data.session?.access_token),
           },
         ]);
       } else {
@@ -199,6 +207,111 @@ export default function AuthScreen({ onLoginSuccess }) {
       const msg = translateSupabaseError(err);
       setErrorMessage(msg);
       Alert.alert('Đăng ký thất bại', msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ==========================================
+  // Xử lý ĐĂNG NHẬP BẰNG GOOGLE OAUTH2
+  // ==========================================
+  const handleGoogleSignIn = async () => {
+    setGoogleLoading(true);
+    setErrorMessage('');
+
+    try {
+      // 1. Tạo Redirect URL tự động tương thích cả Expo Go và Mobile App build (scheme: vietlens)
+      const redirectUrl = Linking.createURL('auth/callback', { scheme: 'vietlens' });
+      console.log('[Google Auth] Redirect URL:', redirectUrl);
+
+      // 2. Lấy URL cấp quyền từ Supabase OAuth
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: true,
+          queryParams: {
+            prompt: 'select_account',
+          },
+        },
+      });
+
+      if (error) throw error;
+      if (!data?.url) throw new Error('Không nhận được liên kết xác thực Google từ Supabase.');
+
+      // 3. Mở phiên trình duyệt WebBrowser
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+
+      // 4. Xử lý khi trình duyệt chuyển hướng quay lại ứng dụng
+      if (result.type === 'success' && result.url) {
+        const parsedUrl = Linking.parse(result.url);
+        const code = parsedUrl.queryParams?.code;
+
+        if (code) {
+          // Luồng chuẩn PKCE (Trao đổi auth code lấy session)
+          const { data: sessionData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(String(code));
+          if (exchangeError) throw exchangeError;
+          if (sessionData?.user) {
+            await syncAndCompleteLogin(sessionData.user, sessionData.session?.access_token);
+          }
+        } else if (parsedUrl.queryParams?.access_token) {
+          // Luồng dự phòng Implicit tokens
+          const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+            access_token: String(parsedUrl.queryParams.access_token),
+            refresh_token: String(parsedUrl.queryParams.refresh_token || ''),
+          });
+          if (sessionError) throw sessionError;
+          if (sessionData?.user) {
+            await syncAndCompleteLogin(sessionData.user, sessionData.session?.access_token);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[Google Auth Error]:', err);
+      const msg = translateSupabaseError(err);
+      setErrorMessage(msg);
+      Alert.alert('Đăng nhập Google', msg);
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  // ==========================================
+  // Xử lý KHÁM PHÁ VỚI TƯ CÁCH KHÁCH (Guest Mode)
+  // ==========================================
+  const handleGuestMode = () => {
+    const guestUser = {
+      id: 'guest-' + Math.random().toString(36).substring(2, 9),
+      name: 'Khách Khám Phá',
+      email: null,
+      role: 'GUEST',
+    };
+    onLoginSuccess(guestUser);
+  };
+
+  // ==========================================
+  // Xử lý QUÊN MẬT KHẨU
+  // ==========================================
+  const handleForgotPassword = async () => {
+    const cleanEmail = email.trim();
+    if (!cleanEmail) {
+      Alert.alert(
+        'Quên Mật Khẩu',
+        'Vui lòng nhập địa chỉ Email của bạn vào ô bên dưới, sau đó bấm lại nút "Quên mật khẩu?".'
+      );
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail);
+      if (error) throw error;
+      Alert.alert(
+        'Đã gửi liên kết',
+        `Một liên kết đặt lại mật khẩu đã được gửi tới ${cleanEmail}. Vui lòng kiểm tra hộp thư.`
+      );
+    } catch (err) {
+      Alert.alert('Lỗi', translateSupabaseError(err));
     } finally {
       setLoading(false);
     }
@@ -328,7 +441,14 @@ export default function AuthScreen({ onLoginSuccess }) {
 
             {/* Mật khẩu */}
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Mật khẩu</Text>
+              <View style={styles.passwordHeader}>
+                <Text style={styles.inputLabel}>Mật khẩu</Text>
+                {authMode === 'login' && (
+                  <TouchableOpacity onPress={handleForgotPassword} activeOpacity={0.7}>
+                    <Text style={styles.forgotPasswordText}>Quên mật khẩu?</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
               <View style={styles.inputWrapper}>
                 <Ionicons
                   name="lock-closed-outline"
@@ -392,11 +512,11 @@ export default function AuthScreen({ onLoginSuccess }) {
               </View>
             )}
 
-            {/* Nút hành động chính (Đăng nhập / Đăng ký) */}
+            {/* Nút hành động chính (Đăng nhập / Đăng ký Email) */}
             <TouchableOpacity
-              style={[styles.primaryBtn, loading && styles.primaryBtnDisabled]}
+              style={[styles.primaryBtn, (loading || googleLoading) && styles.primaryBtnDisabled]}
               onPress={authMode === 'login' ? handleSignIn : handleSignUp}
-              disabled={loading}
+              disabled={loading || googleLoading}
               activeOpacity={0.85}
             >
               {loading ? (
@@ -406,6 +526,41 @@ export default function AuthScreen({ onLoginSuccess }) {
                   {authMode === 'login' ? 'Đăng Nhập' : 'Tạo Tài Khoản'}
                 </Text>
               )}
+            </TouchableOpacity>
+
+            {/* Đường phân cách */}
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>HOẶC TIẾP TỤC VỚI</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            {/* Nút Đăng nhập Google OAuth2 */}
+            <TouchableOpacity
+              style={[styles.googleBtn, (loading || googleLoading) && styles.googleBtnDisabled]}
+              onPress={handleGoogleSignIn}
+              disabled={loading || googleLoading}
+              activeOpacity={0.85}
+            >
+              {googleLoading ? (
+                <ActivityIndicator color={THEME.colors.ink} />
+              ) : (
+                <View style={styles.googleContentRow}>
+                  <Ionicons name="logo-google" size={19} color="#EA4335" style={{ marginRight: 10 }} />
+                  <Text style={styles.googleBtnText}>Tiếp tục với Google</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            {/* Nút Khám phá ngay (Chế độ Khách) */}
+            <TouchableOpacity
+              style={styles.guestBtn}
+              onPress={handleGuestMode}
+              disabled={loading || googleLoading}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="compass-outline" size={18} color={THEME.colors.amber} style={{ marginRight: 8 }} />
+              <Text style={styles.guestBtnText}>Khám phá ngay (Chế độ Khách)</Text>
             </TouchableOpacity>
           </View>
 
@@ -500,30 +655,38 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEE2E2',
     borderWidth: 1,
     borderColor: '#FCA5A5',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
     borderRadius: 10,
+    padding: 12,
     marginTop: 16,
     gap: 8,
   },
   errorText: {
+    flex: 1,
     fontSize: 13,
     color: THEME.colors.red,
-    flex: 1,
     lineHeight: 18,
   },
   formContainer: {
-    width: '100%',
-    marginTop: 18,
+    marginTop: 20,
     gap: 14,
   },
   inputGroup: {
     gap: 6,
   },
+  passwordHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   inputLabel: {
     fontSize: 13,
     fontWeight: '600',
     color: THEME.colors.ink,
+  },
+  forgotPasswordText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: THEME.colors.amber,
   },
   inputWrapper: {
     flexDirection: 'row',
@@ -549,11 +712,11 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     backgroundColor: THEME.colors.red,
-    paddingVertical: 15,
+    paddingVertical: 14,
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 10,
+    marginTop: 6,
     elevation: 3,
     shadowColor: THEME.colors.red,
     shadowOffset: { width: 0, height: 3 },
@@ -564,29 +727,73 @@ const styles = StyleSheet.create({
     opacity: 0.65,
   },
   primaryBtnText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: '#FFFFFF',
+    letterSpacing: 0.3,
   },
   dividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 4,
+    marginVertical: 6,
   },
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: THEME.colors.border,
+    backgroundColor: '#D1CABE',
   },
   dividerText: {
-    marginHorizontal: 12,
+    marginHorizontal: 10,
     fontSize: 11,
     fontWeight: '700',
     color: THEME.colors.inkLight,
+    letterSpacing: 0.5,
   },
-
+  googleBtn: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#D1CABE',
+    paddingVertical: 13,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+  },
+  googleBtnDisabled: {
+    opacity: 0.7,
+  },
+  googleContentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  googleBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: THEME.colors.ink,
+  },
+  guestBtn: {
+    flexDirection: 'row',
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: THEME.colors.amber,
+    paddingVertical: 12,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  guestBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: THEME.colors.amber,
+  },
   termsWrapper: {
-    marginTop: 20,
+    marginTop: 24,
     alignItems: 'center',
   },
   termsText: {

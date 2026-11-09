@@ -1,18 +1,14 @@
 {
   "expo": {
-    "name": "VLensFE",
-    "slug": "VLensFE",
+    "name": "Vietlens",
+    "slug": "vietlens",
+    "scheme": "vietlens",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "plugins": [
-      [
-        "expo-camera",
-        {
-          "cameraPermission": "Cho phép VietLens sử dụng máy ảnh để quét và nhận diện các di tích lịch sử."
-        }
-      ],
+      "./plugins/withUnifiedReleaseSigning",
       [
         "expo-location",
         {
@@ -42,7 +38,7 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "package": "com.anonymous.VLensFE"
+      "package": "com.vietlens.app"
     },
     "web": {
       "favicon": "./assets/favicon.png"

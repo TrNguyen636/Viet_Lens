@@ -58,13 +58,39 @@ export const getBackendBaseUrl = () => {
     return 'http://localhost:8080';
   }
 
-  const detectedHost = getDevHost();
-  if (detectedHost) {
-    return `http://${detectedHost}:8080`;
+  // 1. Ưu tiên cao nhất: Nếu cấu hình EXPO_PUBLIC_API_URL (ví dụ URL ngrok/localtunnel hoặc IP chỉ định)
+  const envUrl = process.env.EXPO_PUBLIC_API_URL;
+  if (envUrl && typeof envUrl === 'string' && envUrl.trim()) {
+    const cleanUrl = envUrl.trim().replace(/\/+$/, '');
+    // Bỏ qua IP cũ 172.16.0.255 nếu chưa đổi
+    if (!cleanUrl.includes('172.16.0.255')) {
+      return cleanUrl;
+    }
   }
 
-  if (process.env.EXPO_PUBLIC_API_URL) {
-    return process.env.EXPO_PUBLIC_API_URL;
+  // 2. Nhận diện IP tự động từ Metro Bundler
+  const detectedHost = getDevHost();
+  if (detectedHost) {
+    // Nếu host phát hiện là domain tunnel của Expo (exp.direct / ngrok / loca.lt),
+    // cổng 8080 không tồn tại trên domain tunnel Metro 8081!
+    if (
+      detectedHost.includes('exp.direct') ||
+      detectedHost.includes('ngrok') ||
+      detectedHost.includes('loca.lt')
+    ) {
+      console.warn(
+        '[NetworkConfig] Đang chạy chế độ Expo Tunnel! Cần mở tunnel cổng 8080 hoặc cấu hình EXPO_PUBLIC_API_URL.'
+      );
+      if (envUrl && typeof envUrl === 'string' && envUrl.trim()) {
+        return envUrl.trim().replace(/\/+$/, '');
+      }
+    } else {
+      return `http://${detectedHost}:8080`;
+    }
+  }
+
+  if (envUrl && typeof envUrl === 'string' && envUrl.trim()) {
+    return envUrl.trim().replace(/\/+$/, '');
   }
 
   if (Platform.OS === 'android') {

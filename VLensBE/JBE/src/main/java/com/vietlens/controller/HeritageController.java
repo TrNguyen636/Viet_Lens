@@ -93,4 +93,20 @@ public class HeritageController {
                     org.springframework.http.HttpStatus.BAD_REQUEST, "ID di sản không đúng định dạng UUID: " + id);
         }
     }
+
+    /**
+     * API Lấy danh sách di sản theo Bounding Box của khung nhìn (Google Maps onCameraIdle - Bước 3)
+     * GET /api/heritage/bbox?minLat=...&minLng=...&maxLat=...&maxLng=...&limit=100
+     */
+    @GetMapping("/bbox")
+    public ResponseEntity<List<HeritageResponseDTO>> getByBoundingBox(
+            @RequestParam("minLat") Double minLat,
+            @RequestParam("minLng") Double minLng,
+            @RequestParam("maxLat") Double maxLat,
+            @RequestParam("maxLng") Double maxLng,
+            @RequestParam(value = "limit", defaultValue = "100") Integer limit,
+            @RequestHeader(value = "Accept-Language", defaultValue = "vi") String lang
+    ) {
+        return ResponseEntity.ok(service.getByBoundingBox(minLat, minLng, maxLat, maxLng, limit, lang));
+    }
 }

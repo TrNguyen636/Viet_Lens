@@ -4,12 +4,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import vi from './vi.json';
 import en from './en.json';
+import ja from './ja.json';
 
 const LANGUAGE_KEY = 'user_preferred_language';
 
 const resources = {
   vi: { translation: vi },
   en: { translation: en },
+  ja: { translation: ja },
 };
 
 i18n
@@ -28,7 +30,7 @@ i18n
 export const initLanguagePreference = async () => {
   try {
     const savedLang = await AsyncStorage.getItem(LANGUAGE_KEY);
-    if (savedLang && (savedLang === 'vi' || savedLang === 'en')) {
+    if (savedLang && ['vi', 'en', 'ja'].includes(savedLang)) {
       await i18n.changeLanguage(savedLang);
       return savedLang;
     }
@@ -41,7 +43,7 @@ export const initLanguagePreference = async () => {
 // Hàm chuyển đổi ngôn ngữ và lưu trữ
 export const changeAppLanguage = async (lang) => {
   try {
-    const target = lang === 'en' ? 'en' : 'vi';
+    const target = ['en', 'ja'].includes(lang) ? lang : 'vi';
     await i18n.changeLanguage(target);
     await AsyncStorage.setItem(LANGUAGE_KEY, target);
     return target;

@@ -23,16 +23,25 @@ public class HeritageService {
 
     private final HeritageInfoRepository repository;
     private final com.vietlens.repository.HeritageTranslationRepository translationRepository;
+    private final com.vietlens.repository.HeritageImageRepository imageRepository;
 
     public HeritageService(HeritageInfoRepository repository,
-                           com.vietlens.repository.HeritageTranslationRepository translationRepository) {
+                           com.vietlens.repository.HeritageTranslationRepository translationRepository,
+                           com.vietlens.repository.HeritageImageRepository imageRepository) {
         this.repository = repository;
         this.translationRepository = translationRepository;
+        this.imageRepository = imageRepository;
     }
 
     private String normalizeLanguage(String lang) {
-        if (lang != null && lang.trim().toLowerCase().startsWith("en")) {
-            return "en";
+        if (lang != null) {
+            String l = lang.trim().toLowerCase();
+            if (l.startsWith("en")) {
+                return "en";
+            }
+            if (l.startsWith("ja")) {
+                return "ja";
+            }
         }
         return "vi";
     }
@@ -70,11 +79,6 @@ public class HeritageService {
                 .toList();
     }
 
-    @Transactional(readOnly = true)
-    public List<HeritageResponseDTO> getAllHeritage() {
-        return getAllHeritage("vi");
-    }
-
     /**
      * Lấy danh sách di sản có hỗ trợ phân trang Pageable và đa ngôn ngữ
      */
@@ -87,31 +91,22 @@ public class HeritageService {
         return page.map(h -> HeritageResponseDTO.fromEntityAndTranslation(h, transMap.get(h.getId())));
     }
 
-    @Transactional(readOnly = true)
-    public org.springframework.data.domain.Page<HeritageResponseDTO> getAllHeritage(org.springframework.data.domain.Pageable pageable) {
-        return getAllHeritage(pageable, "vi");
-    }
-
     /**
-     * Tìm kiếm di sản theo từ khóa và đa ngôn ngữ
+     * Tìm kiếm di sản theo từ khóa và đa ngôn ngữ (hỗ trợ cả tiếng Việt, tiếng Nhật, tiếng Anh)
      */
     @Transactional(readOnly = true)
     public List<HeritageResponseDTO> searchHeritage(String keyword, String lang) {
         if (keyword == null || keyword.trim().isBlank()) {
             return Collections.emptyList();
         }
-        List<HeritageInfo> list = repository.searchAllowedByKeyword(keyword.trim());
+        String targetLang = normalizeLanguage(lang);
+        List<HeritageInfo> list = repository.searchAllowedByKeywordAndLang(keyword.trim(), targetLang);
         List<UUID> ids = list.stream().map(HeritageInfo::getId).toList();
         java.util.Map<UUID, com.vietlens.entity.HeritageTranslation> transMap = getTranslationsMap(ids, lang);
 
         return list.stream()
                 .map(h -> HeritageResponseDTO.fromEntityAndTranslation(h, transMap.get(h.getId())))
                 .toList();
-    }
-
-    @Transactional(readOnly = true)
-    public List<HeritageResponseDTO> searchHeritage(String keyword) {
-        return searchHeritage(keyword, "vi");
     }
 
     /**
@@ -122,18 +117,13 @@ public class HeritageService {
         if (keyword == null || keyword.trim().isBlank()) {
             return org.springframework.data.domain.Page.empty(pageable);
         }
-        org.springframework.data.domain.Page<HeritageInfo> page = repository.searchAllowedByKeyword(keyword.trim(), pageable);
+        String targetLang = normalizeLanguage(lang);
+        org.springframework.data.domain.Page<HeritageInfo> page = repository.searchAllowedByKeywordAndLang(keyword.trim(), targetLang, pageable);
         List<UUID> ids = page.getContent().stream().map(HeritageInfo::getId).toList();
         java.util.Map<UUID, com.vietlens.entity.HeritageTranslation> transMap = getTranslationsMap(ids, lang);
 
         return page.map(h -> HeritageResponseDTO.fromEntityAndTranslation(h, transMap.get(h.getId())));
     }
-
-    @Transactional(readOnly = true)
-    public org.springframework.data.domain.Page<HeritageResponseDTO> searchHeritage(String keyword, org.springframework.data.domain.Pageable pageable) {
-        return searchHeritage(keyword, pageable, "vi");
-    }
-
 
     /**
      * Lấy chi tiết 1 di sản theo UUID và đa ngôn ngữ
@@ -152,12 +142,19 @@ public class HeritageService {
             log.warn("Chưa tìm thấy bản dịch cho di sản {}: {}", id, e.getMessage());
         }
 
-        return HeritageResponseDTO.fromEntityAndTranslation(heritage, translation);
-    }
+        HeritageResponseDTO dto = HeritageResponseDTO.fromEntityAndTranslation(heritage, translation);
+        try {
+            List<String> gallery = imageRepository.findByHeritageIdOrderByDisplayOrderAsc(id)
+                    .stream()
+                    .map(com.vietlens.entity.HeritageImage::getImageUrl)
+                    .filter(url -> url != null && !url.isBlank())
+                    .toList();
+            dto.setGalleryImages(gallery);
+        } catch (Exception e) {
+            log.warn("Chưa tải được gallery images cho di sản {}: {}", id, e.getMessage());
+        }
 
-    @Transactional(readOnly = true)
-    public HeritageResponseDTO getById(UUID id) {
-        return getById(id, "vi");
+        return dto;
     }
 
     /**
@@ -193,8 +190,26 @@ public class HeritageService {
                 .toList();
     }
 
+    /**
+     * Lấy danh sách di sản theo khung nhìn Bounding Box cho Google Maps (Bước 3)
+     */
     @Transactional(readOnly = true)
-    public List<HeritageResponseDTO> getNearby(Double lat, Double lng, Double radius, Integer limit) {
-        return getNearby(lat, lng, radius, limit, "vi");
+    public List<HeritageResponseDTO> getByBoundingBox(Double minLat, Double minLng, Double maxLat, Double maxLng, Integer limit, String lang) {
+        if (minLat == null || minLng == null || maxLat == null || maxLng == null) {
+            return List.of();
+        }
+        int safeLimit = (limit != null && limit > 0) ? Math.min(limit, 300) : 100;
+        double actualMinLat = Math.min(minLat, maxLat);
+        double actualMaxLat = Math.max(minLat, maxLat);
+        double actualMinLng = Math.min(minLng, maxLng);
+        double actualMaxLng = Math.max(minLng, maxLng);
+
+        List<HeritageInfo> entities = repository.findByBoundingBox(actualMinLat, actualMinLng, actualMaxLat, actualMaxLng, safeLimit);
+        List<UUID> ids = entities.stream().map(HeritageInfo::getId).toList();
+        java.util.Map<UUID, com.vietlens.entity.HeritageTranslation> transMap = getTranslationsMap(ids, lang);
+
+        return entities.stream()
+                .map(e -> HeritageResponseDTO.fromEntityAndTranslation(e, transMap.get(e.getId())))
+                .toList();
     }
 }

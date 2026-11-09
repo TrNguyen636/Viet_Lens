@@ -59,7 +59,7 @@ export function adaptHeritage(item) {
     description: description,
     summary: summary,
     shortDescription: summary,
-    dynasty: item.dynasty || item.province || 'Việt Nam cổ truyền',
+    dynasty: item.dynasty || item.category || 'Di sản văn hóa',
     era: item.era || 'Di tích lịch sử văn hóa',
     distance: item.distance != null ? Number(item.distance) : null,
     // Cờ đánh dấu dữ liệu từ Backend thật

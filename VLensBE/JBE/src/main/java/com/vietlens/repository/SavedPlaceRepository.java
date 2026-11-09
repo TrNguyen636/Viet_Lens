@@ -16,15 +16,9 @@ public interface SavedPlaceRepository extends JpaRepository<SavedPlaceEntity, UU
 
     Optional<SavedPlaceEntity> findByUserIdAndHeritageId(UUID userId, UUID heritageId);
 
-    boolean existsByUserIdAndHeritageId(UUID userId, UUID heritageId);
-
-    void deleteByUserIdAndHeritageId(UUID userId, UUID heritageId);
-
     /**
      * Lấy toàn bộ danh sách di sản mà user đã bookmark (sắp xếp mới nhất lên đầu).
      */
     @Query("SELECT s.heritage FROM SavedPlaceEntity s WHERE s.userId = :userId ORDER BY s.createdAt DESC")
     List<HeritageInfo> findSavedHeritagesByUserId(@Param("userId") UUID userId);
-
-    long countByUserId(UUID userId);
 }

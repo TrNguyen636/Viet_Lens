@@ -40,7 +40,7 @@ public class GroqAiService {
     @Value("${ai.openai.base-url:${groq.api.url:https://api.groq.com/openai/v1/chat/completions}}")
     private String baseUrl;
 
-    @Value("${ai.openai.chat.options.model:${groq.api.model:openai/gpt-oss-120b}}")
+    @Value("${ai.openai.chat.options.model:${groq.api.model:llama-3.3-70b-versatile}}")
     private String model;
 
     @Value("${ai.openai.chat.options.temperature:0.7}")
@@ -61,7 +61,12 @@ public class GroqAiService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mã di sản (heritageId) là bắt buộc!");
         }
 
-        boolean isEnglish = lang != null && lang.trim().toLowerCase().startsWith("en");
+        String langCode = "vi";
+        if (lang != null) {
+            String l = lang.trim().toLowerCase();
+            if (l.startsWith("en")) langCode = "en";
+            else if (l.startsWith("ja")) langCode = "ja";
+        }
 
         // 1. Lấy thông tin ngữ cảnh di sản từ database
         HeritageInfo heritage = heritageRepository.findById(request.getHeritageId())
@@ -69,7 +74,7 @@ public class GroqAiService {
                         "Không tìm thấy di sản với ID: " + request.getHeritageId()));
 
         // 2. Xây dựng nội dung cho System Message: [System Prompt] + [Ngữ cảnh Di sản]
-        String systemContent = buildSystemContent(heritage, isEnglish);
+        String systemContent = buildSystemContent(heritage, langCode);
         String userContent = request.getMessage().trim();
         // Giới hạn độ dài câu hỏi để bảo vệ token và tránh prompt injection quá dài
         if (userContent.length() > 800) {
@@ -79,9 +84,14 @@ public class GroqAiService {
         // 3. Kiểm tra cấu hình Groq API Key
         if (apiKey == null || apiKey.isBlank() || apiKey.contains("gsk_dan_key_cua_ong_vao_day")) {
             log.warn("⚠️ Chưa cấu hình GROQ_API_KEY hợp lệ! Trả về phản hồi hướng dẫn.");
-            String message = isEnglish
-                    ? "Welcome to VietLens Heritage Assistant! The system is missing a valid GROQ_API_KEY. Please configure GROQ_API_KEY in the environment."
-                    : "Chào bạn! Tôi là Trợ lý Di sản VietLens. Hệ thống hiện chưa có GROQ_API_KEY hợp lệ. Vui lòng cấu hình biến môi trường GROQ_API_KEY.";
+            String message;
+            if ("ja".equals(langCode)) {
+                message = "VietLens遺産アシスタントへようこそ！システムに有効なGROQ_API_KEYが設定されていません。環境変数GROQ_API_KEYを設定してください。";
+            } else if ("en".equals(langCode)) {
+                message = "Welcome to VietLens Heritage Assistant! The system is missing a valid GROQ_API_KEY. Please configure GROQ_API_KEY in the environment.";
+            } else {
+                message = "Chào bạn! Tôi là Trợ lý Di sản VietLens. Hệ thống hiện chưa có GROQ_API_KEY hợp lệ. Vui lòng cấu hình biến môi trường GROQ_API_KEY.";
+            }
 
             return ChatResponseDTO.builder()
                     .heritageId(heritage.getId())
@@ -96,7 +106,7 @@ public class GroqAiService {
             replyText = callGroqApi(systemContent, userContent);
         } catch (Exception ex) {
             log.warn("Groq AI không phản hồi kịp ({}), kích hoạt câu trả lời dự phòng ngữ cảnh...", ex.getMessage());
-            replyText = buildFallbackReply(heritage, isEnglish);
+            replyText = buildFallbackReply(heritage, langCode);
         }
 
         return ChatResponseDTO.builder()
@@ -106,20 +116,22 @@ public class GroqAiService {
                 .build();
     }
 
-    public ChatResponseDTO chatWithHeritageAi(ChatRequestDTO request) {
-        return chatWithHeritageAi(request, "vi");
-    }
-
     /**
      * Câu trả lời dự phòng ngữ cảnh khi dịch vụ AI ngoại vi gặp sự cố hoặc timeout
      */
-    private String buildFallbackReply(HeritageInfo heritage, boolean isEnglish) {
+    private String buildFallbackReply(HeritageInfo heritage, String langCode) {
         String desc = (heritage.getDescription() != null && !heritage.getDescription().isBlank())
                 ? heritage.getDescription()
                 : "Một trong những địa danh di sản văn hóa lịch sử tiêu biểu của Việt Nam.";
         String shortDesc = desc.length() > 250 ? desc.substring(0, 250) + "..." : desc;
 
-        if (isEnglish) {
+        if ("ja".equals(langCode)) {
+            return String.format("現在AIサービスへの接続が混み合っております。" +
+                    "%s (%s) の基本情報をお届けします: %s",
+                    heritage.getName(),
+                    heritage.getProvince() != null ? heritage.getProvince() : "ベトナム",
+                    shortDesc);
+        } else if ("en".equals(langCode)) {
             return String.format("Network connection to AI services is currently limited. " +
                     "Here is verified information regarding %s (in %s): %s",
                     heritage.getName(),
@@ -194,32 +206,53 @@ public class GroqAiService {
     /**
      * Tạo nội dung System Message kết hợp giữa vai trò Trợ lý Di sản và thông tin chi tiết của di sản
      */
-    private String buildSystemContent(HeritageInfo heritage, boolean isEnglish) {
-        String assistantRole = isEnglish ? """
-            [ROLE - VIETLENS HERITAGE ASSISTANT]:
-            You are the official VietLens Cultural Heritage Assistant, dedicated to preserving and sharing Vietnam's profound historical and architectural legacy.
-            - Persona Tone: Warm, articulate, historically grounded, culturally respectful, and inspiring.
-            - Scope: Answer inquiries regarding history, architecture, local legends, visitor tips, and cultural significance.
-            """ : """
-            [VAI TRÒ - TRỢ LÝ DI SẢN VIỆTLENS]:
-            Bạn là Trợ lý Di sản Văn hóa VietLens chính thức, đại diện cho nền tảng số hóa và bảo tồn di sản văn hóa Việt Nam.
-            - Giọng điệu: Trầm ấm, uyên bác, lịch sự, truyền cảm hứng và đậm đà bản sắc dân tộc.
-            - Trọng tâm nội dung: Giải đáp cặn kẽ về lịch sử hình thành, niên đại, triều đại, nét độc đáo kiến trúc, câu chuyện văn hóa tiền nhân và kinh nghiệm tham quan thực tế.
-            """;
+    private String buildSystemContent(HeritageInfo heritage, String langCode) {
+        String assistantRole;
+        String instructions;
 
-        String instructions = isEnglish ? """
-            [LANGUAGE & ANSWERING INSTRUCTIONS]:
-            1. Language requirement: You MUST answer entirely in fluent, natural, and culturally articulate English. If you introduce traditional Vietnamese terms, briefly clarify their meaning.
-            2. Integrate the heritage context above naturally and informatively.
-            3. Format with clean, mobile-friendly paragraph spacing.
-            4. STRICTLY PROHIBITED: DO NOT use markdown bold like '**' or '****'. Always write natural plain text.
-            """ : """
-            [HƯỚNG DẪN TRẢ LỜI]:
-            1. Trả lời một cách tự nhiên, sâu sắc, cuốn hút và chính xác bằng tiếng Việt.
-            2. Kết hợp thông tin ngữ cảnh của di sản để trả lời đúng trọng tâm câu hỏi của người dùng.
-            3. Trình bày ngắt đoạn rõ ràng, dễ đọc trên màn hình điện thoại di động.
-            4. TUYỆT ĐỐI KHÔNG dùng ký tự in đậm Markdown như '**' hoặc '****'. Hãy viết văn bản thuần túy (plain text) tự nhiên, không bao bọc từ ngữ trong dấu sao.
-            """;
+        if ("ja".equals(langCode)) {
+            assistantRole = """
+                [ROLE - VIETLENS HERITAGE ASSISTANT (日本語)]:
+                あなたはベトナムの文化遺産と歴史的建築物の保存・紹介を行う公式VietLens遺産アシスタントです。
+                - トーン＆マナー: 温かく、丁寧で礼儀正しい敬語を用い、歴史的根拠と文化への敬意を持って感動を伝える語り口。
+                - 回答範囲: 歴史、建築的特徴、地域の伝説、参観のポイント、文化的意義について親切に解説します。
+                """;
+            instructions = """
+                [回答のガイドライン]:
+                1. 必ず流暢で自然、かつ格式ある日本語（敬語・丁寧語）で回答してください。
+                2. 上記の遺産コンテキストの情報を自然に織り込んで質問に的確に答えてください。
+                3. スマートフォンで読みやすいよう、適度な段落分けを行ってください。
+                4. 【厳禁】'**' や '****' などのマークダウン太字は一切使用せず、自然なプレーンテキストで回答してください。
+                """;
+        } else if ("en".equals(langCode)) {
+            assistantRole = """
+                [ROLE - VIETLENS HERITAGE ASSISTANT]:
+                You are the official VietLens Cultural Heritage Assistant, dedicated to preserving and sharing Vietnam's profound historical and architectural legacy.
+                - Persona Tone: Warm, articulate, historically grounded, culturally respectful, and inspiring.
+                - Scope: Answer inquiries regarding history, architecture, local legends, visitor tips, and cultural significance.
+                """;
+            instructions = """
+                [LANGUAGE & ANSWERING INSTRUCTIONS]:
+                1. Language requirement: You MUST answer entirely in fluent, natural, and culturally articulate English. If you introduce traditional Vietnamese terms, briefly clarify their meaning.
+                2. Integrate the heritage context above naturally and informatively.
+                3. Format with clean, mobile-friendly paragraph spacing.
+                4. STRICTLY PROHIBITED: DO NOT use markdown bold like '**' or '****'. Always write natural plain text.
+                """;
+        } else {
+            assistantRole = """
+                [VAI TRÒ - TRỢ LÝ DI SẢN VIỆTLENS]:
+                Bạn là Trợ lý Di sản Văn hóa VietLens chính thức, đại diện cho nền tảng số hóa và bảo tồn di sản văn hóa Việt Nam.
+                - Giọng điệu: Trầm ấm, uyên bác, lịch sự, truyền cảm hứng và đậm đà bản sắc dân tộc.
+                - Trọng tâm nội dung: Giải đáp cặn kẽ về lịch sử hình thành, niên đại, triều đại, nét độc đáo kiến trúc, câu chuyện văn hóa tiền nhân và kinh nghiệm tham quan thực tế.
+                """;
+            instructions = """
+                [HƯỚNG DẪN TRẢ LỜI]:
+                1. Trả lời một cách tự nhiên, sâu sắc, cuốn hút và chính xác bằng tiếng Việt.
+                2. Kết hợp thông tin ngữ cảnh của di sản để trả lời đúng trọng tâm câu hỏi của người dùng.
+                3. Trình bày ngắt đoạn rõ ràng, dễ đọc trên màn hình điện thoại di động.
+                4. TUYỆT ĐỐI KHÔNG dùng ký tự in đậm Markdown như '**' hoặc '****'. Hãy viết văn bản thuần túy (plain text) tự nhiên, không bao bọc từ ngữ trong dấu sao.
+                """;
+        }
 
         return String.format("""
             %s

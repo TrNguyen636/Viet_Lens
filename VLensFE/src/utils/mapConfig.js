@@ -1,28 +1,8 @@
-import { getAiBaseUrl } from '../services/aiVisionService';
-
 /**
- * Cấu hình hệ thống bản đồ Vector PMTiles Toàn Quốc và MapLibre GL JS
+ * Cấu hình hệ thống bản đồ số VietLens (Tọa độ mặc định, danh mục bay nhanh toàn quốc, metadata di sản)
  */
 
 export const MAP_CONFIG = {
-  // Nguồn Vector Tile CDN Đám mây (OpenFreeMap Planet - Bao phủ 100% Việt Nam, miễn phí trọn đời, tải mượt trên 3G/5G/Wi-Fi)
-  CLOUD_VECTOR_TILE_URL: 'https://tiles.openfreemap.org/planet',
-
-  // Style vector trực tiếp từ OpenFreeMap (Tùy chọn)
-  OPENFREEMAP_STYLE_URL: 'https://tiles.openfreemap.org/styles/bright',
-
-  // Đường dẫn PMTiles nội bộ từ PaiService (Tùy chọn khi cần chạy offline hoàn toàn trên máy dev)
-  get PMTILES_URL() {
-    return `${getAiBaseUrl()}/tiles/vietnam.pmtiles`;
-  },
-
-  // Đường dẫn dự phòng vùng trọng điểm Đà Nẵng / Miền Trung trên Supabase Storage (18MB)
-  FALLBACK_PMTILES_URL:
-    'https://fjqgblqepphurmyyiusq.supabase.co/storage/v1/object/public/maps/danang.pmtiles',
-
-  // Máy chủ chỉ đường OpenStreetMap miễn phí (OSRM Routing)
-  OSRM_BASE_URL: 'https://router.project-osrm.org',
-
   // Trung tâm ban đầu: Cầu Rồng - Đà Nẵng (Điểm giữa hai miền đất nước)
   DEFAULT_CENTER: [108.2274, 16.0610],
   DEFAULT_ZOOM: 14.5,
@@ -136,27 +116,6 @@ export const MAP_CONFIG = {
       bearing: 0,
     },
   },
-
-  // Icon & màu sắc nhận diện theo phân loại di sản
-  CATEGORY_META: {
-    'Kiến trúc & Cung đình': { icon: '🏛️', color: '#ea580c' },
-    'Danh lam thắng cảnh': { icon: '⛰️', color: '#0284c7' },
-    'Di tích lịch sử': { icon: '⛩️', color: '#dc2626' },
-    'Văn hóa & Đời sống': { icon: '🪕', color: '#d97706' },
-    'Lễ hội truyền thống': { icon: '🏮', color: '#c026d3' },
-    'Ẩm thực dân gian': { icon: '🍜', color: '#16a34a' },
-    default: { icon: '📍', color: '#C62828' },
-  },
 };
-
-export function getCategoryMeta(category) {
-  if (!category) return MAP_CONFIG.CATEGORY_META.default;
-  for (const [key, val] of Object.entries(MAP_CONFIG.CATEGORY_META)) {
-    if (category.toLowerCase().includes(key.toLowerCase())) {
-      return val;
-    }
-  }
-  return MAP_CONFIG.CATEGORY_META.default;
-}
 
 export default MAP_CONFIG;

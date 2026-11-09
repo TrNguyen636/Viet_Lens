@@ -1,8 +1,13 @@
 {
-  "venvPath": "VLensBE/PaiService",
-  "venv": "venv",
   "extraPaths": [
-    "VLensBE/PaiService",
-    "VLensBE/PaiService/venv/Lib/site-packages"
+    "VLensModel",
+    "CrawlingData",
+    "C:/Project_DV/Model_VietLens/venv/Lib/site-packages",
+    "C:/Users/ADMIN/AppData/Local/Programs/Python/Python311/Lib/site-packages"
+  ],
+  "exclude": [
+    "**/node_modules",
+    "**/venv",
+    "**/*.ipynb"
   ]
 }

@@ -15,20 +15,20 @@ import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import AuthScreen from './src/screens/AuthScreen';
 import HomeScreen from './src/screens/HomeScreen';
-import CameraScanScreen from './src/screens/CameraScanScreen';
 import MapScreen from './src/screens/MapScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import DetailScreen from './src/screens/DetailScreen';
-import { THEME } from './src/utils/theme';
+import { THEME, ThemeProvider, useTheme } from './src/utils/theme';
 import { supabase } from './src/services/supabase';
 import appService from './src/api/appService';
 import './src/locales/i18n';
 import { initLanguagePreference } from './src/locales/i18n';
 import { useTranslation } from 'react-i18next';
 
-export default function App() {
+function MainApp() {
   const { t } = useTranslation();
+  const { theme, isDark } = useTheme();
 
   // Navigation Flow States:
   // 'onboarding' | 'auth' | 'main'
@@ -38,11 +38,19 @@ export default function App() {
   // Active Bottom Tab: 'home' | 'camera' | 'map' | 'chat' | 'profile'
   const [activeTab, setActiveTab] = useState('home');
 
-  const [selectedSite, setSelectedSite] = useState(null); // When opening DetailScreen
-  const [chatSiteContext, setChatSiteContext] = useState(null); // Khởi tạo null, không dùng mock Hoàng Thành Thăng Long
+  const [selectedSite, setSelectedSite] = useState(null); // Khi mở màn hình Chi tiết (DetailScreen)
+  const [chatSiteContext, setChatSiteContext] = useState(null); // Chỉ dùng cho Chat khi bấm nút đỏ 'Hỏi Trợ lý AI'
+  const [mapFocusedSite, setMapFocusedSite] = useState(null);   // Chỉ dùng cho Map khi bấm điều hướng sang bản đồ
+  const [hasVisitedMap, setHasVisitedMap] = useState(false);   // Duy trì một Map instance duy nhất (Bước 2)
 
   // Lắng nghe bàn phím ảo để tự động ẩn Bottom Navigation Bar khi gõ phím
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    if (activeTab === 'map') {
+      setHasVisitedMap(true);
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     initLanguagePreference();
@@ -98,11 +106,32 @@ export default function App() {
 
     checkUserSession();
 
-    // Lắng nghe sự kiện đăng xuất hoặc refresh token
+    // Lắng nghe sự kiện đăng nhập, đăng xuất hoặc cập nhật phiên
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT') {
         setCurrentUser(null);
         setAppState('auth');
+      } else if (event === 'SIGNED_IN' && session?.user) {
+        console.log('[App] onAuthStateChange SIGNED_IN:', session.user.email);
+        const loggedUser = {
+          id: session.user.id,
+          name: session.user.user_metadata?.full_name || session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Du khách',
+          email: session.user.email,
+          role: 'USER',
+        };
+        setCurrentUser(loggedUser);
+        setAppState('main');
+
+        // Đồng bộ hồ sơ ngầm với Spring Boot backend
+        appService
+          .syncUserProfile({
+            token: session.access_token,
+            fullName: loggedUser.name,
+          })
+          .then((profile) => {
+            if (profile) setCurrentUser(profile);
+          })
+          .catch(() => {});
       }
     });
 
@@ -131,23 +160,26 @@ export default function App() {
     setAppState('auth');
   };
 
-  // Site Select & Deep Dive
+  // Site Select & Deep Dive (Chỉ mở màn hình chi tiết, không can thiệp vào Chat hay Map)
   const handleSelectSite = (site) => {
     setSelectedSite(site);
-    setChatSiteContext(site);
   };
 
+  // Điều hướng sang Chat: CHỈ ĐƯỢC KÍCH HOẠT khi người dùng bấm nút đỏ "Hỏi Trợ lý AI" trong DetailScreen hoặc Camera Scan
   const handleNavigateToChat = (site = null, imageUri = null) => {
     if (site) {
       setChatSiteContext(imageUri ? { ...site, userPhoto: imageUri } : site);
+    } else {
+      setChatSiteContext(null);
     }
     setSelectedSite(null);
     setActiveTab('chat');
   };
 
+  // Điều hướng sang Map: Chỉ cập nhật di tích được chọn vào Map
   const handleNavigateToMap = (site = null) => {
     if (site) {
-      setChatSiteContext(site);
+      setMapFocusedSite(site);
       setSelectedSite(null);
     }
     setActiveTab('map');
@@ -176,50 +208,55 @@ export default function App() {
           site={selectedSite}
           onBack={() => setSelectedSite(null)}
           onNavigateToChat={handleNavigateToChat}
+          onNavigateToMap={handleNavigateToMap}
         />
       );
     }
 
-    // 4. Main 5 Bottom Tabs
+    // 4. Main 4 Bottom Tabs
     return (
       <SafeAreaView
         style={[
           styles.safeContainer,
-          activeTab === 'camera' && { backgroundColor: '#000000' },
+          { backgroundColor: theme.colors.bg },
         ]}
       >
-        <ExpoStatusBar style={activeTab === 'camera' ? 'light' : 'dark'} />
-        <View style={[styles.contentArea, activeTab === 'camera' && { backgroundColor: 'transparent' }]}>
+        <ExpoStatusBar style={isDark ? 'light' : 'dark'} />
+        <View style={styles.contentArea}>
           {activeTab === 'home' && (
           <HomeScreen
             user={currentUser}
             onSelectSite={handleSelectSite}
             onNavigateToCamera={handleNavigateToCamera}
             onNavigateToMap={handleNavigateToMap}
+            onNavigateToProfile={() => setActiveTab('profile')}
           />
         )}
 
-        {activeTab === 'camera' && (
-          <CameraScanScreen
-            onNavigateToMap={handleNavigateToMap}
-            onNavigateToChat={handleNavigateToChat}
-            onSelectSite={handleSelectSite}
-            onBack={() => setActiveTab('home')}
-          />
-        )}
-
-        {activeTab === 'map' && (
-          <MapScreen
-            onSelectSite={handleSelectSite}
-            onNavigateToChat={handleNavigateToChat}
-            focusedSite={chatSiteContext}
-          />
+        {/* Tab 2: MapScreen - Duy trì một Map instance duy nhất, không tạo lại khi chuyển tab (Bước 2) */}
+        {(activeTab === 'map' || hasVisitedMap) && (
+          <View
+            style={
+              activeTab === 'map'
+                ? { flex: 1 }
+                : { position: 'absolute', width: 0, height: 0, opacity: 0, overflow: 'hidden', zIndex: -1 }
+            }
+            pointerEvents={activeTab === 'map' ? 'auto' : 'none'}
+          >
+            <MapScreen
+              onSelectSite={handleSelectSite}
+              onNavigateToChat={handleNavigateToChat}
+              focusedSite={mapFocusedSite}
+            />
+          </View>
         )}
 
         {activeTab === 'chat' && (
           <ChatScreen
+            user={currentUser}
             activeSite={chatSiteContext}
             onNavigateToMap={handleNavigateToMap}
+            onClearActiveSite={() => setChatSiteContext(null)}
           />
         )}
 
@@ -233,7 +270,7 @@ export default function App() {
 
       {/* Modern Floating Bottom Navigation Bar (4 Tab Thanh Lịch, Cân Xứng) */}
       {!isKeyboardVisible && (
-        <View style={styles.bottomNavContainer}>
+        <View style={[styles.bottomNavContainer, { backgroundColor: theme.colors.tabBarBg, borderColor: theme.colors.tabBarBorder }]}>
           {/* Tab 1: Khám phá */}
           <TouchableOpacity
             style={styles.navItem}
@@ -243,12 +280,13 @@ export default function App() {
             <Ionicons
               name={activeTab === 'home' ? 'compass' : 'compass-outline'}
               size={24}
-              color={activeTab === 'home' ? THEME.colors.amber : THEME.colors.inkMuted}
+              color={activeTab === 'home' ? theme.colors.amber : theme.colors.inkMuted}
             />
             <Text
               style={[
                 styles.navLabel,
-                activeTab === 'home' && styles.navLabelActive,
+                { color: theme.colors.inkMuted },
+                activeTab === 'home' && [styles.navLabelActive, { color: theme.colors.amber }],
               ]}
             >
               {t('nav.home')}
@@ -264,12 +302,13 @@ export default function App() {
             <Ionicons
               name={activeTab === 'map' ? 'map' : 'map-outline'}
               size={23}
-              color={activeTab === 'map' ? THEME.colors.amber : THEME.colors.inkMuted}
+              color={activeTab === 'map' ? theme.colors.amber : theme.colors.inkMuted}
             />
             <Text
               style={[
                 styles.navLabel,
-                activeTab === 'map' && styles.navLabelActive,
+                { color: theme.colors.inkMuted },
+                activeTab === 'map' && [styles.navLabelActive, { color: theme.colors.amber }],
               ]}
             >
               {t('nav.map')}
@@ -285,12 +324,13 @@ export default function App() {
             <Ionicons
               name={activeTab === 'chat' ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline'}
               size={23}
-              color={activeTab === 'chat' ? THEME.colors.amber : THEME.colors.inkMuted}
+              color={activeTab === 'chat' ? theme.colors.amber : theme.colors.inkMuted}
             />
             <Text
               style={[
                 styles.navLabel,
-                activeTab === 'chat' && styles.navLabelActive,
+                { color: theme.colors.inkMuted },
+                activeTab === 'chat' && [styles.navLabelActive, { color: theme.colors.amber }],
               ]}
             >
               {t('nav.chat')}
@@ -306,12 +346,13 @@ export default function App() {
             <Ionicons
               name={activeTab === 'profile' ? 'person' : 'person-outline'}
               size={23}
-              color={activeTab === 'profile' ? THEME.colors.amber : THEME.colors.inkMuted}
+              color={activeTab === 'profile' ? theme.colors.amber : theme.colors.inkMuted}
             />
             <Text
               style={[
                 styles.navLabel,
-                activeTab === 'profile' && styles.navLabelActive,
+                { color: theme.colors.inkMuted },
+                activeTab === 'profile' && [styles.navLabelActive, { color: theme.colors.amber }],
               ]}
             >
               {t('nav.profile')}
@@ -323,9 +364,15 @@ export default function App() {
     );
   };
 
+  return renderContent();
+}
+
+export default function App() {
   return (
     <SafeAreaProvider>
-      {renderContent()}
+      <ThemeProvider>
+        <MainApp />
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }
@@ -369,30 +416,5 @@ const styles = StyleSheet.create({
   navLabelActive: {
     color: THEME.colors.amber,
     fontWeight: '700',
-  },
-  navItemCamera: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    marginTop: -20,
-    zIndex: 99,
-  },
-  cameraCircle: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: THEME.colors.red,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 8,
-    shadowColor: THEME.colors.red,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    borderWidth: 3,
-    borderColor: '#FFF',
-  },
-  cameraCircleActive: {
-    backgroundColor: THEME.colors.amber,
   },
 });
