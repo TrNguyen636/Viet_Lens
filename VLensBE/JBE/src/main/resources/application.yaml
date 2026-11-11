@@ -42,11 +42,12 @@ supabase:
 # Cấu hình Groq AI theo chuẩn OpenAI
 ai:
   openai:
-    api-key: ${GROQ_API_KEY}
+    api-key: ${GROQ_API_KEY:}
+    api-keys: ${GROQ_API_KEYS:}
     base-url: https://api.groq.com/openai/v1/chat/completions
     chat:
       options:
-        model: llama-3.3-70b-versatile
+        model: ${GROQ_MODEL:qwen/qwen3.8-27b}
         temperature: 0.7
         max-tokens: 1024
     embedding:

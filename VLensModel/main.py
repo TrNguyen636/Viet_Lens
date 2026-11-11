@@ -37,6 +37,7 @@ import time
 import uuid
 from app.config.db import init_db, log_request, log_feedback, get_dashboard_metrics, get_recent_logs
 from app.image_utils import preprocess_image
+from app.llm.groq_key_manager import groq_key_manager
 from pydantic import BaseModel
 
 # =========================================================
@@ -82,7 +83,9 @@ def health_check():
         "status": "running",
 
         "message":
-        "Multimodal Travel Agent API is active."
+        "Multimodal Travel Agent API is active.",
+
+        "groq_keys": groq_key_manager.get_status(),
     }
 
 

@@ -8,10 +8,18 @@ from io import BytesIO
 from PIL import Image
 
 from app.config.settings import settings
+from app.llm.groq_key_manager import groq_key_manager
 
 from app.llm.prompts.vision_prompts import (
     VISION_SYSTEM_PROMPT
 )
+
+
+class _GroqVisionHttpError(Exception):
+    def __init__(self, status_code: int, message: str, response=None):
+        super().__init__(message)
+        self.status_code = status_code
+        self.response = response
 
 
 def is_corrupted_output(text: str) -> bool:
@@ -38,14 +46,13 @@ class VisionClient:
     def __init__(self):
 
         self.base_url = settings.PINGGY_URL
-        self.groq_api_key = settings.GROQ_API_KEY
 
     # =====================================================
     # FALLBACK / VERIFICATION VIA GROQ QWEN 3.8 27B VISION
     # =====================================================
 
     def analyze_with_groq_vision(self, image_bytes: bytes, prompt: str):
-        if not self.groq_api_key:
+        if not groq_key_manager.has_keys():
             return None
         try:
             print("[VisionClient] Running high-accuracy Qwen 3.8 27B Vision verification...")
@@ -68,26 +75,36 @@ class VisionClient:
                 "max_tokens": 512,
                 "response_format": {"type": "json_object"}
             }
-            resp = requests.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self.groq_api_key}",
-                    "Content-Type": "application/json"
-                },
-                json=payload,
-                timeout=25
-            )
-            if resp.status_code == 200:
-                content = resp.json()["choices"][0]["message"]["content"]
-                parsed = json.loads(content)
-                return {
-                    "landmark_name": parsed.get("landmark_name", "Unknown"),
-                    "city": parsed.get("city", "Unknown"),
-                    "country": parsed.get("country", "Việt Nam"),
-                    "reasoning_confidence": float(parsed.get("reasoning_confidence", 0.95) or 0.95),
-                    "vision_reasoning": parsed.get("vision_reasoning", "Identified via Qwen Vision."),
-                    "alternative_candidates": parsed.get("alternative_candidates", [])
-                }
+
+            def _call(api_key: str):
+                resp = requests.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json=payload,
+                    timeout=25
+                )
+                if resp.status_code == 200:
+                    return resp.json()
+                raise _GroqVisionHttpError(
+                    resp.status_code,
+                    f"HTTP {resp.status_code}: {resp.text[:300]}",
+                    response=resp,
+                )
+
+            data = groq_key_manager.execute_with_key_fallback(_call)
+            content = data["choices"][0]["message"]["content"]
+            parsed = json.loads(content)
+            return {
+                "landmark_name": parsed.get("landmark_name", "Unknown"),
+                "city": parsed.get("city", "Unknown"),
+                "country": parsed.get("country", "Việt Nam"),
+                "reasoning_confidence": float(parsed.get("reasoning_confidence", 0.95) or 0.95),
+                "vision_reasoning": parsed.get("vision_reasoning", "Identified via Qwen Vision."),
+                "alternative_candidates": parsed.get("alternative_candidates", [])
+            }
         except Exception as e:
             print(f"[VisionClient Groq Fallback Error]: {e}")
         return None

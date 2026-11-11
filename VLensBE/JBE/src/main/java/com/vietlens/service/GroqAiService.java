@@ -14,8 +14,17 @@ import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
+import jakarta.annotation.PostConstruct;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Service tích hợp Groq API (chuẩn OpenAI format) để xử lý Chatbot đa nhân vật (Multi-Persona) cho di sản.
@@ -37,11 +46,65 @@ public class GroqAiService {
     @Value("${ai.openai.api-key:${groq.api.key:}}")
     private String apiKey;
 
+    @Value("${ai.openai.api-keys:${groq.api.keys:}}")
+    private String apiKeysRaw;
+
     @Value("${ai.openai.base-url:${groq.api.url:https://api.groq.com/openai/v1/chat/completions}}")
     private String baseUrl;
 
-    @Value("${ai.openai.chat.options.model:${groq.api.model:llama-3.3-70b-versatile}}")
+    @Value("${ai.openai.chat.options.model:${groq.api.model:qwen/qwen3.8-27b}}")
     private String model;
+
+    private final AtomicInteger activeKeyIndex = new AtomicInteger(0);
+    private final ConcurrentHashMap<String, Instant> cooldownUntil = new ConcurrentHashMap<>();
+    private final Set<String> disabledKeys = ConcurrentHashMap.newKeySet();
+    private volatile List<String> cachedKeyPool;
+
+    @PostConstruct
+    public void initKeyPool() {
+        cachedKeyPool = buildKeyPool();
+        log.info("Đã khởi tạo Groq Key Pool cho Backend với {} key khả dụng (model={}).",
+                cachedKeyPool.size(), model);
+    }
+
+    private List<String> getKeyPool() {
+        List<String> pool = cachedKeyPool;
+        if (pool == null) {
+            pool = buildKeyPool();
+            cachedKeyPool = pool;
+        }
+        return pool;
+    }
+
+    private List<String> buildKeyPool() {
+        LinkedHashSet<String> unique = new LinkedHashSet<>();
+        addCandidateKeys(unique, apiKey);
+        addCandidateKeys(unique, apiKeysRaw);
+        return List.copyOf(unique);
+    }
+
+    private static void addCandidateKeys(LinkedHashSet<String> dest, String rawList) {
+        if (rawList == null || rawList.isBlank()) return;
+        for (String part : rawList.split("[,;\\s]+")) {
+            addCandidateKey(dest, part);
+        }
+    }
+
+    private static void addCandidateKey(LinkedHashSet<String> dest, String raw) {
+        if (raw == null) return;
+        String cleaned = raw.trim().replaceAll("^['\"]|['\"]$", "");
+        if (cleaned.isEmpty()) return;
+        String lower = cleaned.toLowerCase(Locale.ROOT);
+        if (lower.startsWith("your_") || lower.startsWith("<your") || lower.contains("gsk_dan_key")) {
+            return;
+        }
+        dest.add(cleaned);
+    }
+
+    private static String maskKey(String key) {
+        if (key == null || key.length() <= 10) return "***";
+        return key.substring(0, 7) + "..." + key.substring(key.length() - 4);
+    }
 
     @Value("${ai.openai.chat.options.temperature:0.7}")
     private Double temperature;
@@ -81,9 +144,9 @@ public class GroqAiService {
             userContent = userContent.substring(0, 800);
         }
 
-        // 3. Kiểm tra cấu hình Groq API Key
-        if (apiKey == null || apiKey.isBlank() || apiKey.contains("gsk_dan_key_cua_ong_vao_day")) {
-            log.warn("⚠️ Chưa cấu hình GROQ_API_KEY hợp lệ! Trả về phản hồi hướng dẫn.");
+        // 3. Kiểm tra cấu hình Groq API Key Pool
+        if (getKeyPool().isEmpty()) {
+            log.warn("⚠️ Chưa cấu hình GROQ_API_KEY / GROQ_API_KEYS hợp lệ! Trả về phản hồi hướng dẫn.");
             String message;
             if ("ja".equals(langCode)) {
                 message = "VietLens遺産アシスタントへようこそ！システムに有効なGROQ_API_KEYが設定されていません。環境変数GROQ_API_KEYを設定してください。";
@@ -147,60 +210,149 @@ public class GroqAiService {
     }
 
     /**
-     * Gọi Groq API theo định dạng OpenAI:
-     * Headers: Authorization: Bearer {groq.api.key}, Content-Type: application/json
-     * Body: { "model": "...", "messages": [{"role": "system", ...}, {"role": "user", ...}] }
-     * Response: choices[0].message.content
+     * Gọi Groq API theo định dạng OpenAI kèm cơ chế xoay vòng nhiều key khi hết quota / lỗi xác thực.
      */
     private String callGroqApi(String systemContent, String userContent) {
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.setBearerAuth(apiKey.trim());
-
-            List<Map<String, String>> messages = List.of(
-                    Map.of("role", "system", "content", systemContent),
-                    Map.of("role", "user", "content", userContent)
-            );
-
-            Map<String, Object> requestBody = Map.of(
-                    "model", model,
-                    "messages", messages,
-                    "temperature", temperature != null ? temperature : 0.7,
-                    "max_tokens", maxTokens != null ? maxTokens : 1024
-            );
-
-            String requestUrl = resolveRequestUrl(baseUrl);
-
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
-
-            ResponseEntity<String> response = restTemplate.postForEntity(requestUrl, entity, String.class);
-
-            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                JsonNode root = objectMapper.readTree(response.getBody());
-                // Trích xuất: choices[0].message.content
-                JsonNode contentNode = root.path("choices")
-                        .path(0)
-                        .path("message")
-                        .path("content");
-
-                if (!contentNode.isMissingNode() && !contentNode.asText().isBlank()) {
-                    // Loại bỏ hoàn toàn các ký tự in đậm Markdown như **, ***, ****
-                    return contentNode.asText().replaceAll("\\*{2,}", "").trim();
-                }
-            }
-
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Không nhận được nội dung trả lời từ Groq API.");
-
-        } catch (HttpStatusCodeException ex) {
-            log.error("Lỗi HTTP từ Groq API: Status={}, Body={}", ex.getStatusCode(), ex.getResponseBodyAsString());
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
-                    "Lỗi từ Groq AI: " + ex.getStatusText() + " - " + ex.getResponseBodyAsString());
-        } catch (Exception ex) {
-            log.error("Lỗi xử lý khi gọi Groq API: {}", ex.getMessage(), ex);
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
-                    "Lỗi xử lý AI: " + ex.getMessage());
+        List<Integer> candidates = orderedCandidateIndices();
+        if (candidates.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Không có GROQ_API_KEY khả dụng.");
         }
+
+        List<String> pool = getKeyPool();
+        String requestUrl = resolveRequestUrl(baseUrl);
+        List<Map<String, String>> messages = List.of(
+                Map.of("role", "system", "content", systemContent),
+                Map.of("role", "user", "content", userContent)
+        );
+        Map<String, Object> requestBody = Map.of(
+                "model", model,
+                "messages", messages,
+                "temperature", temperature != null ? temperature : 0.7,
+                "max_tokens", maxTokens != null ? maxTokens : 1024
+        );
+
+        Exception lastException = null;
+        for (int pos = 0; pos < candidates.size(); pos++) {
+            int idx = candidates.get(pos);
+            String currentKey = pool.get(idx);
+            try {
+                String reply = executeSingleGroqRequest(requestUrl, currentKey, requestBody);
+                activeKeyIndex.set(idx);
+                cooldownUntil.remove(currentKey);
+                return reply;
+            } catch (HttpStatusCodeException ex) {
+                lastException = ex;
+                int status = ex.getStatusCode().value();
+                String body = ex.getResponseBodyAsString();
+                if (!isSwitchableGroqError(status, body)) {
+                    log.error("Lỗi HTTP từ Groq API: Status={}, Body={}", ex.getStatusCode(), body);
+                    throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                            "Lỗi từ Groq AI: " + ex.getStatusText() + " - " + body);
+                }
+
+                markKeyFailure(currentKey, status, body, ex.getResponseHeaders());
+                String nextHint = (pos + 1 < candidates.size())
+                        ? "chuyển sang " + maskKey(pool.get(candidates.get(pos + 1)))
+                        : "đã thử hết toàn bộ " + candidates.size() + " key";
+                log.warn("Groq key {} gặp lỗi HTTP {} -> {}", maskKey(currentKey), status, nextHint);
+            } catch (ResponseStatusException ex) {
+                throw ex;
+            } catch (Exception ex) {
+                log.error("Lỗi xử lý khi gọi Groq API: {}", ex.getMessage(), ex);
+                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                        "Lỗi xử lý AI: " + ex.getMessage());
+            }
+        }
+
+        String msg = lastException != null ? lastException.getMessage() : "All Groq API keys exhausted";
+        throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Tất cả Groq API key đều gặp lỗi: " + msg);
+    }
+
+    private String executeSingleGroqRequest(String requestUrl, String key, Map<String, Object> requestBody)
+            throws Exception {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(key);
+
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
+        ResponseEntity<String> response = restTemplate.postForEntity(requestUrl, entity, String.class);
+
+        if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+            JsonNode root = objectMapper.readTree(response.getBody());
+            JsonNode contentNode = root.path("choices")
+                    .path(0)
+                    .path("message")
+                    .path("content");
+
+            if (!contentNode.isMissingNode() && !contentNode.asText().isBlank()) {
+                return contentNode.asText()
+                        .replaceAll("(?s)<think>.*?</think>", "")
+                        .replaceAll("\\*{2,}", "")
+                        .trim();
+            }
+        }
+
+        throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                "Không nhận được nội dung trả lời từ Groq API.");
+    }
+
+    private List<Integer> orderedCandidateIndices() {
+        List<String> pool = getKeyPool();
+        int n = pool.size();
+        if (n == 0) return List.of();
+
+        Instant now = Instant.now();
+        int start = Math.floorMod(activeKeyIndex.get(), n);
+        List<Integer> healthy = new ArrayList<>();
+        List<Map.Entry<Instant, Integer>> cooling = new ArrayList<>();
+
+        for (int offset = 0; offset < n; offset++) {
+            int idx = (start + offset) % n;
+            String key = pool.get(idx);
+            if (disabledKeys.contains(key)) {
+                continue;
+            }
+            Instant expiry = cooldownUntil.get(key);
+            if (expiry == null || !expiry.isAfter(now)) {
+                healthy.add(idx);
+            } else {
+                cooling.add(Map.entry(expiry, idx));
+            }
+        }
+
+        cooling.sort(Comparator.comparing(Map.Entry::getKey));
+        for (Map.Entry<Instant, Integer> entry : cooling) {
+            healthy.add(entry.getValue());
+        }
+        return healthy;
+    }
+
+    private static boolean isSwitchableGroqError(int status, String body) {
+        if (status == 429 || status == 401 || status == 403 || status == 402 || status == 503) {
+            return true;
+        }
+        if (body == null) return false;
+        String lower = body.toLowerCase(Locale.ROOT);
+        return lower.contains("rate_limit")
+                || lower.contains("insufficient_quota")
+                || lower.contains("invalid_api_key");
+    }
+
+    private void markKeyFailure(String key, int status, String body, HttpHeaders headers) {
+        if (status == 401 || status == 403) {
+            disabledKeys.add(key);
+            return;
+        }
+        long cooldownSeconds = 65L;
+        if (status == 402 || (body != null && body.toLowerCase(Locale.ROOT).contains("per day"))) {
+            cooldownSeconds = 1800L;
+        } else if (headers != null && headers.getFirst("Retry-After") != null) {
+            try {
+                cooldownSeconds = Math.max(5L, Long.parseLong(headers.getFirst("Retry-After").trim()));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        cooldownUntil.put(key, Instant.now().plusSeconds(cooldownSeconds));
     }
 
     /**
