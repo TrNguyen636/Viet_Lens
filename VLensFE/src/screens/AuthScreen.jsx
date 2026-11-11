@@ -215,6 +215,24 @@ export default function AuthScreen({ onLoginSuccess }) {
   // ==========================================
   // Xử lý ĐĂNG NHẬP BẰNG GOOGLE OAUTH2
   // ==========================================
+  const extractOAuthParams = (callbackUrl) => {
+    const params = { ...(Linking.parse(callbackUrl)?.queryParams || {}) };
+    const hashIdx = callbackUrl.indexOf('#');
+    if (hashIdx !== -1) {
+      const fragment = callbackUrl.slice(hashIdx + 1);
+      for (const pair of fragment.split('&')) {
+        if (!pair) continue;
+        const eqIdx = pair.indexOf('=');
+        const key = decodeURIComponent(eqIdx === -1 ? pair : pair.slice(0, eqIdx));
+        const val = eqIdx === -1 ? '' : decodeURIComponent(pair.slice(eqIdx + 1).replace(/\+/g, ' '));
+        if (key && params[key] === undefined) {
+          params[key] = val;
+        }
+      }
+    }
+    return params;
+  };
+
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
     setErrorMessage('');
@@ -242,23 +260,28 @@ export default function AuthScreen({ onLoginSuccess }) {
       // 3. Mở phiên trình duyệt WebBrowser
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
 
-      // 4. Xử lý khi trình duyệt chuyển hướng quay lại ứng dụng
+      // 4. Xử lý khi trình duyệt chuyển hướng quay lại ứng dụng (hỗ trợ cả ?query và #fragment)
       if (result.type === 'success' && result.url) {
-        const parsedUrl = Linking.parse(result.url);
-        const code = parsedUrl.queryParams?.code;
+        const oauthParams = extractOAuthParams(result.url);
 
-        if (code) {
+        if (oauthParams.error || oauthParams.error_description) {
+          throw new Error(oauthParams.error_description || oauthParams.error);
+        }
+
+        if (oauthParams.code) {
           // Luồng chuẩn PKCE (Trao đổi auth code lấy session)
-          const { data: sessionData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(String(code));
+          const { data: sessionData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(
+            String(oauthParams.code)
+          );
           if (exchangeError) throw exchangeError;
           if (sessionData?.user) {
             await syncAndCompleteLogin(sessionData.user, sessionData.session?.access_token);
           }
-        } else if (parsedUrl.queryParams?.access_token) {
-          // Luồng dự phòng Implicit tokens
+        } else if (oauthParams.access_token) {
+          // Luồng dự phòng Implicit tokens (#access_token=... hoặc ?access_token=...)
           const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-            access_token: String(parsedUrl.queryParams.access_token),
-            refresh_token: String(parsedUrl.queryParams.refresh_token || ''),
+            access_token: String(oauthParams.access_token),
+            refresh_token: String(oauthParams.refresh_token || ''),
           });
           if (sessionError) throw sessionError;
           if (sessionData?.user) {
