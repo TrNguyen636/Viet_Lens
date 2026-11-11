@@ -3,7 +3,7 @@
 Tài liệu này tổng hợp toàn bộ các lệnh và kịch bản kiểm thử cho cả 3 thành phần chính của hệ thống VietLens:
 1. **`VLensBE`**: Spring Boot Backend (Quản lý CSDL Supabase, API di sản, API lịch sử trò chuyện, xác thực Supabase JWT) - Cổng `8080`.
 2. **`VLensModel`**: FastAPI AI Agent (LangGraph + Vision Model Qwen2.5-VL LoRA / Mock) - Cổng `8000` & `8082`.
-3. **`VLensFE`**: React Native Expo App (Giao diện Mobile, Slide Bar lịch sử chat, Bản đồ Vector 3D, Camera Scan, AI Chat) - Cổng `8081`.
+3. **`VLensFE`**: React Native Expo App (Giao diện Mobile 4 tab, Slide Bar lịch sử chat, Bản đồ Vector 3D, Nhận diện ảnh & AI Chat hợp nhất) - Cổng `8081`.
 
 ---
 
@@ -33,9 +33,6 @@ Chạy lệnh trực tiếp hoặc nhấp đúp file `.bat`:
 # Cách 1: Dùng script tạo sẵn (Khuyên dùng)
 cd c:\Project_DV\Viet_Lens\VLensBE\JBE
 .\run_backend.bat
-
-# Hoặc:
-.\run_be.bat
 
 # Cách 2: Chạy trực tiếp qua Maven Wrapper
 cd c:\Project_DV\Viet_Lens\VLensBE\JBE
@@ -147,13 +144,12 @@ curl.exe -X POST http://127.0.0.1:8000/process-json -H "Content-Type: applicatio
 
 ---
 
-### Kịch bản 3: Quét Di Sản qua Camera (`CameraScanScreen`)
-1. Chuyển sang tab **Quét Di sản** (Icon Camera giữa thanh điều hướng).
-2. Hướng máy ảnh chụp hoặc chọn ảnh di sản từ thư viện.
+### Kịch bản 3: Quét Di Sản trực tiếp bằng Camera trong AI Chat (`ChatScreen`)
+1. Tại tab **Cố vấn AI** (`ChatScreen`), bấm vào biểu tượng **Máy ảnh (Camera)** cạnh ô nhập tin nhắn (hoặc nút **Quét Di sản** từ màn hình Trang chủ).
+2. Hướng máy ảnh chụp trực tiếp di sản hoặc chọn ảnh từ thư viện -> Bấm **Gửi**.
 3. **Kỳ vọng:**
    - Log terminal `VLensModel` cổng `8000` nhảy dòng: `POST /process-json HTTP/1.1 200 OK`.
-   - Bảng thông tin (Bottom Sheet) bật lên hiển thị tên di sản, địa chỉ, niên đại và độ tin cậy.
-   - Có nút điều hướng trực tiếp sang trò chuyện chuyên sâu hoặc mở bản đồ.
+   - AI tự động nhận diện tên di sản, hiển thị độ tin cậy, bài thuyết minh chi tiết cùng nút **"Xem vị trí trên Bản đồ"** ngay trong luồng hội thoại.
 
 ---
 
@@ -165,18 +161,17 @@ curl.exe -X POST http://127.0.0.1:8000/process-json -H "Content-Type: applicatio
 ---
 
 ### Kịch bản 5: Kiểm thử Đa ngôn ngữ Tiếng Nhật ('ja') & Chuyển đổi 3 Ngôn ngữ (VI - EN - JA)
-1. **Nạp dữ liệu Seeding vào Supabase**:
+1. **Nạp dữ liệu chuẩn hóa vào Supabase**:
    - Mở **Supabase Dashboard** -> Vào **SQL Editor**.
-   - Mở và copy toàn bộ nội dung file [supabase_seed_japanese_translations.sql](file:///c:/Project_DV/Viet_Lens/VLensBE/database/supabase_seed_japanese_translations.sql) -> Dán vào SQL Editor và nhấn **Run**.
+   - Mở và copy toàn bộ nội dung file [supabase_standardize_japanese_images_and_split.sql](file:///c:/Project_DV/Viet_Lens/VLensBE/database/supabase_standardize_japanese_images_and_split.sql) -> Dán vào SQL Editor và nhấn **Run**.
    - **Kỳ vọng kết quả đối chiếu:**
-     * `vi`: 46 bản ghi.
-     * `en`: 46 bản ghi (đã bù 4 bản dịch tiếng Anh còn thiếu).
-     * `ja`: 46 bản ghi (100% di sản đã có bản dịch tiếng Nhật).
+     * `heritage_info`: 240 địa danh.
+     * `heritage_translations`: 720 bản ghi (`vi`, `en`, `ja` — mỗi ngôn ngữ 240 bản ghi chuẩn xác).
 2. **Kiểm thử trên Mobile App (`VLensFE`)**:
    - Khởi động lại JBE (`run_backend.bat`) và VLensFE (`npm start` hoặc `run_fe.bat`).
-   - Mở màn hình **Tài khoản (Profile)** -> Chạm vào mục **Ngôn ngữ** để chuyển sang **`🇯🇵 日本語`** (hoặc chuyển bằng nút `🇯🇵 JA` trên thanh chuyển đổi).
+   - Mở màn hình **Tài khoản (Profile)** -> Chạm vào mục **Ngôn ngữ** để chuyển sang **`🇯🇵 日本語`**.
    - **Kỳ vọng:**
-     * Giao diện toàn app chuyển sang tiếng Nhật (Thanh menu: *探す, AIカメラ, 地図, AIガイド, マイページ*).
+     * Giao diện toàn app chuyển sang tiếng Nhật (Thanh menu 4 tab: *探す, 地図, AIガイド, マイページ*).
      * Bấm vào bất kỳ di sản nào (ví dụ *Cầu Rồng* -> *ドラゴン橋*, *Cầu Quay Sông Hàn* -> *ハン川旋回橋*, *Phố cổ Hội An* -> *ホイアン旧市街*): Tên, phân loại, địa chỉ và bài giới thiệu hiển thị hoàn toàn bằng tiếng Nhật chuẩn xác.
      * Bấm nút **AI Audio Guide**: Nghe thuyết minh trực tiếp bằng giọng đọc tiếng Nhật (`ja-JP`).
      * Vào tab **AIガイド (AI Chat)** và đặt câu hỏi bằng tiếng Nhật: Trợ lý AI VietLens chào và giải đáp bằng tiếng Nhật trang nhã (敬語).
