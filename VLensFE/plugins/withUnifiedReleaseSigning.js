@@ -3,6 +3,26 @@ const fs = require('fs');
 const path = require('path');
 
 /**
+ * Tìm vị trí dấu '{' và '}' tương ứng của 1 block Groovy để không khớp nhầm sang block kế bên (như buildTypes.release)
+ */
+function findBlockBounds(source, blockName) {
+  const match = new RegExp(`\\b${blockName}\\s*\\{`).exec(source);
+  if (!match) return null;
+  const openBraceIndex = source.indexOf('{', match.index);
+  let depth = 0;
+  for (let i = openBraceIndex; i < source.length; i++) {
+    if (source[i] === '{') depth++;
+    else if (source[i] === '}') {
+      depth--;
+      if (depth === 0) {
+        return { start: openBraceIndex, end: i };
+      }
+    }
+  }
+  return null;
+}
+
+/**
  * withUnifiedReleaseSigning Expo Config Plugin
  * Configures Release signing configuration with vietlens-release.jks for Vietlens mobile app.
  */
@@ -64,9 +84,14 @@ function withUnifiedReleaseSigning(config, options = {}) {
       contents = contents.replace(/signingConfigs\s*\{/, `${releaseSigningSnippet}\n    signingConfigs {`);
     }
 
-    // 2. Thêm khối signingConfigs.release nếu prebuild chưa có
-    if (!/signingConfigs\s*\{[\s\S]*?\brelease\s*\{/.test(contents)) {
-      const releaseConfigBlock = `        release {
+    // 2. Chỉ kiểm tra bên trong scope của signingConfigs { ... } để không khớp nhầm buildTypes.release
+    const signingBounds = findBlockBounds(contents, 'signingConfigs');
+    const signingBlock = signingBounds
+      ? contents.slice(signingBounds.start, signingBounds.end + 1)
+      : '';
+    if (signingBounds && !/\brelease\s*\{/.test(signingBlock)) {
+      const releaseConfigBlock = `
+        release {
             if (resolvedStoreFile.exists() && releaseStorePassword && releaseKeyPassword) {
                 storeFile resolvedStoreFile
                 storePassword releaseStorePassword
@@ -74,8 +99,6 @@ function withUnifiedReleaseSigning(config, options = {}) {
                 keyPassword releaseKeyPassword
                 enableV1Signing = true
                 enableV2Signing = true
-                enableV3Signing = true
-                enableV4Signing = true
             } else {
                 storeFile file('debug.keystore')
                 storePassword 'android'
@@ -83,7 +106,10 @@ function withUnifiedReleaseSigning(config, options = {}) {
                 keyPassword 'android'
             }
         }`;
-      contents = contents.replace(/(signingConfigs\s*\{)/, `$1\n${releaseConfigBlock}`);
+      contents =
+        contents.slice(0, signingBounds.start + 1) +
+        releaseConfigBlock +
+        contents.slice(signingBounds.start + 1);
     }
 
     // 3. Chuyển buildTypes.release sang dùng signingConfigs.release thay vì debug
