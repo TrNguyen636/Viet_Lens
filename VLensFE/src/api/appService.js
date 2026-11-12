@@ -1,5 +1,84 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import axiosClient from './axiosClient';
 import { supabase } from '../services/supabase';
+import { haversineDistanceKm } from '../utils/dijkstraRouter';
+
+const HERITAGE_DIRECT_SELECT =
+  'id, name, description, category, province, address, latitude, longitude, image_url';
+const FAST_HERITAGE_TIMEOUT_MS = 8000;
+
+/**
+ * Ghép bản dịch từ bảng heritage_translations nếu ngôn ngữ hiện tại khác tiếng Việt
+ */
+async function applySupabaseTranslations(rows) {
+  const normalized = (rows || []).map((item) => ({
+    ...item,
+    imageUrl: item.image_url,
+  }));
+  if (normalized.length === 0) return normalized;
+
+  try {
+    const lang = (await AsyncStorage.getItem('user_preferred_language')) || 'vi';
+    if (lang === 'vi') return normalized;
+
+    const { data: translations, error } = await supabase
+      .from('heritage_translations')
+      .select('heritage_id, name, description, category, province, address')
+      .eq('language_code', lang)
+      .in(
+        'heritage_id',
+        normalized.map((item) => item.id)
+      );
+
+    if (error || !Array.isArray(translations) || translations.length === 0) {
+      return normalized;
+    }
+
+    const byHeritageId = new Map(translations.map((tr) => [tr.heritage_id, tr]));
+    return normalized.map((item) => {
+      const tr = byHeritageId.get(item.id);
+      if (!tr) return item;
+      return {
+        ...item,
+        name: tr.name || item.name,
+        description: tr.description || item.description,
+        category: tr.category || item.category,
+        province: tr.province || item.province,
+        address: tr.address || item.address,
+      };
+    });
+  } catch {
+    return normalized;
+  }
+}
+
+/**
+ * Truy vấn trực tiếp bảng heritage_info trên Supabase làm dự phòng khi Backend Render đang sleep
+ */
+async function fetchHeritageFromSupabaseDirect({
+  minLat,
+  maxLat,
+  minLng,
+  maxLng,
+  limit,
+} = {}) {
+  let query = supabase.from('heritage_info').select(HERITAGE_DIRECT_SELECT);
+
+  if (minLat != null && maxLat != null && minLng != null && maxLng != null) {
+    query = query
+      .gte('latitude', minLat)
+      .lte('latitude', maxLat)
+      .gte('longitude', minLng)
+      .lte('longitude', maxLng);
+  }
+  if (limit != null) {
+    query = query.limit(limit);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return await applySupabaseTranslations(data);
+}
 
 /**
  * Service chứa toàn bộ các hàm gọi API đến Spring Boot Backend (JBE)
@@ -15,7 +94,14 @@ export const appService = {
    * @returns {Promise<Array>} List<HeritageResponseDTO>
    */
   getAllHeritage: async () => {
-    return await axiosClient.get('/api/heritage/all');
+    try {
+      return await axiosClient.get('/api/heritage/all', {
+        timeout: FAST_HERITAGE_TIMEOUT_MS,
+      });
+    } catch (err) {
+      console.warn('[appService] /api/heritage/all fallback to Supabase:', err?.message);
+      return await fetchHeritageFromSupabaseDirect();
+    }
   },
 
   /**
@@ -25,9 +111,22 @@ export const appService = {
    * @returns {Promise<Array>} List<HeritageResponseDTO>
    */
   searchHeritage: async (keyword) => {
-    return await axiosClient.get('/api/heritage/search', {
-      params: { keyword },
-    });
+    try {
+      return await axiosClient.get('/api/heritage/search', {
+        params: { keyword },
+        timeout: FAST_HERITAGE_TIMEOUT_MS,
+      });
+    } catch (err) {
+      console.warn('[appService] /api/heritage/search fallback to Supabase:', err?.message);
+      const all = await fetchHeritageFromSupabaseDirect();
+      const q = String(keyword || '').trim().toLowerCase();
+      if (!q) return all;
+      return all.filter((item) =>
+        [item.name, item.address, item.province, item.description, item.category].some(
+          (field) => String(field || '').toLowerCase().includes(q)
+        )
+      );
+    }
   },
 
   /**
@@ -35,14 +134,29 @@ export const appService = {
    * Endpoint: GET /api/heritage/nearby?lat=...&lng=...&radius=...&limit=...
    * @param {number} lat - Vĩ độ
    * @param {number} lng - Kinh độ
-   * @param {number} radius - Bán kính km (mặc định 10km)
+   * @param {number} radius - Bán kính km (mặc định 15km)
    * @param {number} limit - Số lượng kết quả tối đa
    * @returns {Promise<Array>} List<HeritageResponseDTO> có kèm trường distance
    */
   getNearbyHeritage: async (lat, lng, radius = 15.0, limit = 20) => {
-    return await axiosClient.get('/api/heritage/nearby', {
-      params: { lat, lng, radius, limit },
-    });
+    try {
+      return await axiosClient.get('/api/heritage/nearby', {
+        params: { lat, lng, radius, limit },
+        timeout: FAST_HERITAGE_TIMEOUT_MS,
+      });
+    } catch (err) {
+      console.warn('[appService] /api/heritage/nearby fallback to Supabase:', err?.message);
+      const all = await fetchHeritageFromSupabaseDirect();
+      return all
+        .filter((item) => item.latitude != null && item.longitude != null)
+        .map((item) => ({
+          ...item,
+          distance: haversineDistanceKm(lat, lng, item.latitude, item.longitude),
+        }))
+        .filter((item) => item.distance <= radius)
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, limit);
+    }
   },
 
   /**
@@ -60,24 +174,14 @@ export const appService = {
       if (err?.name === 'CanceledError' || err?.name === 'AbortError') {
         throw err;
       }
-      // Dự phòng truy vấn trực tiếp từ CSDL Supabase của dự án nếu Spring Boot chưa restart
-      const sMinLat = Math.min(minLat, maxLat);
-      const sMaxLat = Math.max(minLat, maxLat);
-      const sMinLng = Math.min(minLng, maxLng);
-      const sMaxLng = Math.max(minLng, maxLng);
-      const { data, error } = await supabase
-        .from('heritage_info')
-        .select('id, name, description, category, province, address, latitude, longitude, image_url')
-        .gte('latitude', sMinLat)
-        .lte('latitude', sMaxLat)
-        .gte('longitude', sMinLng)
-        .lte('longitude', sMaxLng)
-        .limit(limit);
-      if (error) throw error;
-      return (data || []).map((item) => ({
-        ...item,
-        imageUrl: item.image_url,
-      }));
+      // Dự phòng truy vấn trực tiếp từ CSDL Supabase của dự án nếu Spring Boot chưa sẵn sàng
+      return await fetchHeritageFromSupabaseDirect({
+        minLat: Math.min(minLat, maxLat),
+        maxLat: Math.max(minLat, maxLat),
+        minLng: Math.min(minLng, maxLng),
+        maxLng: Math.max(maxLng, maxLng),
+        limit,
+      });
     }
   },
 

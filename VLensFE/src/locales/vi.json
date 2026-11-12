@@ -136,5 +136,11 @@
     "pickAnother": "Chọn ảnh khác",
     "serverError": "Không thể kết nối đến máy chủ AI",
     "serverErrorSub": "Vui lòng kiểm tra máy chủ AI (cổng 8000) và đảm bảo thiết bị cùng mạng Wi-Fi LAN."
+  },
+  "update": {
+    "title": "Đã có bản cập nhật mới",
+    "versionSubtitle": "Phiên bản hiện tại {{current}} → Bản mới {{latest}}",
+    "later": "Để sau",
+    "updateNow": "Cập nhật ngay"
   }
 }

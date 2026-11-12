@@ -25,6 +25,12 @@ import appService from './src/api/appService';
 import './src/locales/i18n';
 import { initLanguagePreference } from './src/locales/i18n';
 import { useTranslation } from 'react-i18next';
+import {
+  checkForAppUpdate,
+  skipUpdateBuild,
+  openUpdateDownload,
+} from './src/services/appUpdateService';
+import UpdatePromptModal from './src/components/UpdatePromptModal';
 
 function MainApp() {
   const { t } = useTranslation();
@@ -45,6 +51,7 @@ function MainApp() {
 
   // Lắng nghe bàn phím ảo để tự động ẩn Bottom Navigation Bar khi gõ phím
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState(null);
 
   useEffect(() => {
     if (activeTab === 'map') {
@@ -54,6 +61,19 @@ function MainApp() {
 
   useEffect(() => {
     initLanguagePreference();
+  }, []);
+
+  useEffect(() => {
+    if (__DEV__ || Platform.OS !== 'android') return;
+    let cancelled = false;
+    checkForAppUpdate().then((info) => {
+      if (!cancelled && info?.hasUpdate) {
+        setUpdateInfo(info);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -364,7 +384,25 @@ function MainApp() {
     );
   };
 
-  return renderContent();
+  return (
+    <>
+      {renderContent()}
+      <UpdatePromptModal
+        visible={!!updateInfo}
+        updateInfo={updateInfo}
+        onUpdate={() => {
+          openUpdateDownload(updateInfo?.downloadUrl);
+          setUpdateInfo(null);
+        }}
+        onLater={async () => {
+          if (updateInfo?.latestBuildNumber) {
+            await skipUpdateBuild(updateInfo.latestBuildNumber);
+          }
+          setUpdateInfo(null);
+        }}
+      />
+    </>
+  );
 }
 
 export default function App() {

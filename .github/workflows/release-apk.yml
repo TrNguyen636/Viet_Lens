@@ -1,0 +1,178 @@
+name: Build & Release Android APK
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'VLensFE/**'
+      - '.github/workflows/release-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-apk:
+    name: Build Signed VietLens APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: 'VLensFE/package-lock.json'
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install FE dependencies
+        working-directory: VLensFE
+        run: npm ci
+
+      - name: Validate required secrets & decode release keystore
+        working-directory: VLensFE
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$ANDROID_KEYSTORE_PASSWORD" ] || [ -z "$ANDROID_KEY_PASSWORD" ]; then
+            echo "::error::Thiếu GitHub Secrets ký APK (KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_PASSWORD)."
+            exit 1
+          fi
+          if [ -z "$EXPO_PUBLIC_SUPABASE_URL" ] || [ -z "$EXPO_PUBLIC_SUPABASE_ANON_KEY" ]; then
+            echo "::error::Thiếu GitHub Secrets Supabase (EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY)."
+            exit 1
+          fi
+          mkdir -p signing
+          printf '%s' "$KEYSTORE_BASE64" | tr -d '\n\r ' | base64 -d > signing/vietlens-release.jks
+          ls -lh signing/vietlens-release.jks
+
+      - name: Create production .env from GitHub Secrets
+        working-directory: VLensFE
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          EXPO_PUBLIC_API_URL: ${{ secrets.EXPO_PUBLIC_API_URL }}
+          EXPO_PUBLIC_AI_API_URL: ${{ secrets.EXPO_PUBLIC_AI_API_URL }}
+          EXPO_PUBLIC_MAPS_API_KEY: ${{ secrets.EXPO_PUBLIC_MAPS_API_KEY }}
+          EXPO_PUBLIC_GROQ_API_KEY: ${{ secrets.EXPO_PUBLIC_GROQ_API_KEY }}
+        run: |
+          rm -f .env.local
+          API_URL="${EXPO_PUBLIC_API_URL:-https://viet-lens.onrender.com}"
+          AI_URL="${EXPO_PUBLIC_AI_API_URL:-https://viet-lens-model.onrender.com}"
+          cat > .env <<EOF
+          EXPO_PUBLIC_SUPABASE_URL=$EXPO_PUBLIC_SUPABASE_URL
+          EXPO_PUBLIC_SUPABASE_ANON_KEY=$EXPO_PUBLIC_SUPABASE_ANON_KEY
+          EXPO_PUBLIC_API_URL=$API_URL
+          EXPO_PUBLIC_AI_API_URL=$AI_URL
+          EXPO_PUBLIC_MAPS_API_KEY=$EXPO_PUBLIC_MAPS_API_KEY
+          EXPO_PUBLIC_GROQ_API_KEY=$EXPO_PUBLIC_GROQ_API_KEY
+          EOF
+
+      - name: Bump version & buildNumber in app.json
+        working-directory: VLensFE
+        env:
+          RUN_NUMBER: ${{ github.run_number }}
+          GITHUB_REPO: ${{ github.repository }}
+        run: |
+          node -e '
+            const fs = require("fs");
+            const cfg = JSON.parse(fs.readFileSync("app.json", "utf8"));
+            const buildNum = Number(process.env.RUN_NUMBER || 1);
+            cfg.expo.version = `1.0.${buildNum}`;
+            cfg.expo.android = cfg.expo.android || {};
+            cfg.expo.android.versionCode = buildNum;
+            cfg.expo.extra = cfg.expo.extra || {};
+            cfg.expo.extra.buildNumber = buildNum;
+            cfg.expo.extra.githubRepo = process.env.GITHUB_REPO || "TrNguyen636/Viet_Lens";
+            fs.writeFileSync("app.json", JSON.stringify(cfg, null, 2) + "\n");
+            console.log("Prepared version:", cfg.expo.version, "buildNumber:", buildNum);
+          '
+
+      - name: Generate Android project with Expo Prebuild
+        working-directory: VLensFE
+        run: npx expo prebuild --platform android --clean --no-install
+
+      - name: Build Release APK
+        working-directory: VLensFE/android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Verify bundle URLs and APK signing certificate
+        working-directory: VLensFE
+        env:
+          EXPO_PUBLIC_API_URL: ${{ secrets.EXPO_PUBLIC_API_URL }}
+        run: |
+          APK_PATH="android/app/build/outputs/apk/release/app-release.apk"
+          BUNDLE_PATH="android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle"
+          if [ ! -f "$APK_PATH" ]; then
+            echo "::error::Không tìm thấy file APK đầu ra tại $APK_PATH"
+            exit 1
+          fi
+          node -e '
+            const fs = require("fs");
+            const bundle = fs.readFileSync(process.argv[1], "utf8");
+            const expectedHost = new URL(process.env.EXPO_PUBLIC_API_URL || "https://viet-lens.onrender.com").host;
+            if (!bundle.includes(expectedHost)) {
+              throw new Error(`Release bundle thiếu host Backend production: ${expectedHost}`);
+            }
+            console.log("Bundle verified OK for host:", expectedHost);
+          ' "$BUNDLE_PATH"
+          CERT_INFO=$(keytool -printcert -jarfile "$APK_PATH")
+          echo "$CERT_INFO" | head -n 15
+          if echo "$CERT_INFO" | grep -q "CN=Android Debug"; then
+            echo "::error::APK đang bị ký bằng debug.keystore thay vì vietlens-release.jks!"
+            exit 1
+          fi
+          cp "$APK_PATH" VietLens-release.apk
+
+      - name: Publish GitHub Release
+        working-directory: VLensFE
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_NUMBER: ${{ github.run_number }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          TAG="v1.0.${RUN_NUMBER}"
+          NOTES=$(cat <<EOF
+          Bản build tự động từ nhánh \`main\` (\`${{ github.sha }}\`).
+
+          **Phiên bản:** \`${TAG}\` (build #${RUN_NUMBER})
+          **Thay đổi gần nhất:**
+          > ${COMMIT_MSG:-Manual workflow dispatch}
+
+          ### Hướng dẫn cập nhật
+          Tải file **\`VietLens-release.apk\`** bên dưới và mở trên điện thoại Android để cài đè bản mới.
+          EOF
+          )
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" VietLens-release.apk --clobber
+          else
+            gh release create "$TAG" VietLens-release.apk \
+              --title "VietLens $TAG" \
+              --notes "$NOTES" \
+              --latest
+          fi

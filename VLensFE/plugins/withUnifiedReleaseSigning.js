@@ -13,10 +13,10 @@ function withUnifiedReleaseSigning(config, options = {}) {
   return withAppBuildGradle(config, (gradleConfig) => {
     let contents = gradleConfig.modResults.contents;
 
-    // Check if release signing is already configured
-    if (!contents.includes('signingConfigs.release')) {
+    // 1. Khai báo biến đọc keystore & credentials từ ENV / credentials.txt trước signingConfigs
+    if (!contents.includes('def releaseStoreFile')) {
       const releaseSigningSnippet = `
-    // Unified Release Signing Configuration
+    // Unified Release Signing Credentials & Keystore Setup
     def releaseStoreFile = findProperty("VIETLENS_RELEASE_STORE_FILE") ?: "${storeFileName}"
     def releaseKeyAlias = findProperty("VIETLENS_RELEASE_KEY_ALIAS") ?: "${keyAlias}"
     def releaseStorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: findProperty("ANDROID_KEYSTORE_PASSWORD")
@@ -57,10 +57,40 @@ function withUnifiedReleaseSigning(config, options = {}) {
     if (!resolvedStoreFile.exists()) {
         resolvedStoreFile = file("../../signing/" + releaseStoreFile)
     }
+
+    println "[Vietlens] Keystore path: \${resolvedStoreFile.absolutePath} (exists: \${resolvedStoreFile.exists()})"
+    println "[Vietlens] Release signing credentials loaded: \${releaseStorePassword != null && releaseKeyPassword != null}"
 `;
-      // Inject variables before signingConfigs
-      contents = contents.replace('signingConfigs {', `${releaseSigningSnippet}\n    signingConfigs {`);
+      contents = contents.replace(/signingConfigs\s*\{/, `${releaseSigningSnippet}\n    signingConfigs {`);
     }
+
+    // 2. Thêm khối signingConfigs.release nếu prebuild chưa có
+    if (!/signingConfigs\s*\{[\s\S]*?\brelease\s*\{/.test(contents)) {
+      const releaseConfigBlock = `        release {
+            if (resolvedStoreFile.exists() && releaseStorePassword && releaseKeyPassword) {
+                storeFile resolvedStoreFile
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = true
+            } else {
+                storeFile file('debug.keystore')
+                storePassword 'android'
+                keyAlias 'androiddebugkey'
+                keyPassword 'android'
+            }
+        }`;
+      contents = contents.replace(/(signingConfigs\s*\{)/, `$1\n${releaseConfigBlock}`);
+    }
+
+    // 3. Chuyển buildTypes.release sang dùng signingConfigs.release thay vì debug
+    contents = contents.replace(
+      /(buildTypes\s*\{[\s\S]*?\brelease\s*\{[\s\S]*?)signingConfig\s*(?:=\s*)?signingConfigs\.debug/,
+      '$1signingConfig = signingConfigs.release'
+    );
 
     gradleConfig.modResults.contents = contents;
     return gradleConfig;

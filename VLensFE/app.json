@@ -27,6 +27,7 @@
       }
     },
     "android": {
+      "versionCode": 1,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.ACCESS_FINE_LOCATION",
@@ -44,6 +45,8 @@
       "favicon": "./assets/favicon.png"
     },
     "extra": {
+      "buildNumber": 1,
+      "githubRepo": "TrNguyen636/Viet_Lens",
       "eas": {
         "projectId": "43d4998b-6e6e-4b15-9458-d4d4898f0c76"
       }

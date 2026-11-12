@@ -136,5 +136,11 @@
     "pickAnother": "Pick Another",
     "serverError": "Cannot Connect to AI Server",
     "serverErrorSub": "Please verify the AI service (port 8000) and ensure your device is on the same Wi-Fi LAN."
+  },
+  "update": {
+    "title": "New Update Available",
+    "versionSubtitle": "Current {{current}} → Latest {{latest}}",
+    "later": "Later",
+    "updateNow": "Update Now"
   }
 }

@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { THEME, useTheme } from '../utils/theme';
 import appService from '../api/appService';
 import { adaptHeritageList, DEFAULT_HERITAGE_IMAGE } from '../utils/heritageAdapter';
+import { haversineDistanceKm } from '../utils/dijkstraRouter';
 import useUserLocation from '../hooks/useUserLocation';
 
 const { width } = Dimensions.get('window');
@@ -35,13 +36,21 @@ export default function HomeScreen({ user, onSelectSite, onNavigateToCamera, onN
   const [isSearching, setIsSearching] = useState(false);
   const [failedImageIds, setFailedImageIds] = useState(new Set());
   const masterSitesRef = useRef([]);
+  const userCoordsRef = useRef(userCoords);
+  const lastNearbyCoordsRef = useRef(null);
 
-  // 1. Tải danh sách di sản & di sản lân cận từ Backend
+  useEffect(() => {
+    userCoordsRef.current = userCoords;
+  }, [userCoords]);
+
+  // 1. Tải danh sách di sản & di sản lân cận từ Backend (dự phòng Supabase)
   const loadHeritageData = useCallback(async () => {
     try {
       setFailedImageIds(new Set());
-      const lat = userCoords?.latitude || 16.0544;
-      const lng = userCoords?.longitude || 108.2022;
+      const coords = userCoordsRef.current;
+      const lat = coords?.latitude || 16.0544;
+      const lng = coords?.longitude || 108.2022;
+      lastNearbyCoordsRef.current = { latitude: lat, longitude: lng };
 
       const [allRes, nearbyRes] = await Promise.allSettled([
         appService.getAllHeritage(),
@@ -49,7 +58,7 @@ export default function HomeScreen({ user, onSelectSite, onNavigateToCamera, onN
       ]);
 
       if (allRes.status === 'fulfilled' && Array.isArray(allRes.value) && allRes.value.length > 0) {
-        console.log(`[HomeScreen] Tải thành công ${allRes.value.length} di sản từ Spring Boot Backend!`);
+        console.log(`[HomeScreen] Tải thành công ${allRes.value.length} di sản!`);
         const adapted = adaptHeritageList(allRes.value);
         masterSitesRef.current = adapted;
         setAllSites(adapted);
@@ -77,11 +86,49 @@ export default function HomeScreen({ user, onSelectSite, onNavigateToCamera, onN
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [userCoords, i18n?.language]);
+  }, [i18n?.language]);
 
   useEffect(() => {
     loadHeritageData();
   }, [loadHeritageData]);
+
+  // Chỉ cập nhật danh sách lân cận khi người dùng thực sự di chuyển > 0.5km (tránh tải lại toàn bộ CSDL mỗi 3s)
+  useEffect(() => {
+    if (!userCoords || masterSitesRef.current.length === 0) return;
+    const prev = lastNearbyCoordsRef.current;
+    if (
+      prev &&
+      haversineDistanceKm(prev.latitude, prev.longitude, userCoords.latitude, userCoords.longitude) < 0.5
+    ) {
+      return;
+    }
+
+    lastNearbyCoordsRef.current = {
+      latitude: userCoords.latitude,
+      longitude: userCoords.longitude,
+    };
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const nearbyRes = await appService.getNearbyHeritage(
+          userCoords.latitude,
+          userCoords.longitude,
+          50.0,
+          10
+        );
+        if (!cancelled && Array.isArray(nearbyRes) && nearbyRes.length > 0) {
+          setNearbySites(adaptHeritageList(nearbyRes));
+        }
+      } catch {
+        // Giữ nguyên danh sách nổi bật hiện tại nếu cập nhật GPS thất bại
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userCoords]);
 
   // Pull-to-refresh
   const onRefresh = useCallback(() => {
