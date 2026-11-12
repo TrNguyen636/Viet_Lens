@@ -127,21 +127,40 @@ jobs:
           EXPO_PUBLIC_API_URL: ${{ secrets.EXPO_PUBLIC_API_URL }}
         run: |
           APK_PATH="android/app/build/outputs/apk/release/app-release.apk"
-          BUNDLE_PATH="android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle"
           if [ ! -f "$APK_PATH" ]; then
-            echo "::error::Không tìm thấy file APK đầu ra tại $APK_PATH"
+            APK_PATH=$(find android/app/build/outputs/apk -name "*.apk" | head -n 1 || true)
+          fi
+          if [ -z "$APK_PATH" ] || [ ! -f "$APK_PATH" ]; then
+            echo "::error::Không tìm thấy file APK đầu ra!"
             exit 1
           fi
-          node -e '
-            const fs = require("fs");
-            const bundle = fs.readFileSync(process.argv[1], "utf8");
-            const expectedHost = new URL(process.env.EXPO_PUBLIC_API_URL || "https://viet-lens.onrender.com").host;
-            if (!bundle.includes(expectedHost)) {
-              throw new Error(`Release bundle thiếu host Backend production: ${expectedHost}`);
-            }
-            console.log("Bundle verified OK for host:", expectedHost);
-          ' "$BUNDLE_PATH"
-          CERT_INFO=$(keytool -printcert -jarfile "$APK_PATH")
+          echo "Found APK: $APK_PATH"
+
+          python3 - "$APK_PATH" <<'PY'
+          import os, sys, zipfile
+          from urllib.parse import urlparse
+
+          apk_path = sys.argv[1]
+          api_url = os.environ.get("EXPO_PUBLIC_API_URL") or "https://viet-lens.onrender.com"
+          expected_host = urlparse(api_url).netloc or "viet-lens.onrender.com"
+
+          with zipfile.ZipFile(apk_path, "r") as zf:
+              if "assets/index.android.bundle" not in zf.namelist():
+                  raise SystemExit("APK thiếu assets/index.android.bundle!")
+              bundle_bytes = zf.read("assets/index.android.bundle")
+
+          if expected_host.encode("utf-8") not in bundle_bytes:
+              raise SystemExit(f"Release bundle trong APK thiếu host Backend: {expected_host}")
+
+          print(f"Verified bundle inside APK ({len(bundle_bytes)} bytes) contains host: {expected_host}")
+          PY
+
+          APKSIGNER=$(find "${ANDROID_HOME:-$ANDROID_SDK_ROOT}/build-tools" -name apksigner 2>/dev/null | sort -V | tail -n 1 || true)
+          if [ -n "$APKSIGNER" ]; then
+            CERT_INFO=$("$APKSIGNER" verify --print-certs "$APK_PATH")
+          else
+            CERT_INFO=$(keytool -printcert -jarfile "$APK_PATH")
+          fi
           echo "$CERT_INFO" | head -n 15
           if echo "$CERT_INFO" | grep -q "CN=Android Debug"; then
             echo "::error::APK đang bị ký bằng debug.keystore thay vì vietlens-release.jks!"
