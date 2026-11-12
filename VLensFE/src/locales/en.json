@@ -65,7 +65,16 @@
     "addressCopied": "Address copied to clipboard!",
     "openMapDirect": "View on Map",
     "storySection": "Story & History",
-    "locationSection": "Location & Info"
+    "descriptionSection": "Description",
+    "locationSection": "Location & Info",
+    "addressLabel": "Site Address",
+    "updating": "Updating...",
+    "locatingCoords": "Determining...",
+    "defaultCategory": "Cultural Heritage",
+    "bookmarkError": "Unable to update bookmarks right now.",
+    "shareTitle": "VietLens - Vietnam Heritage",
+    "shareFooter": "Explore Vietnam's Cultural Heritage with VietLens!",
+    "playingBadge": "PLAYING"
   },
   "chat": {
     "headerTitle": "AI Heritage Advisor",

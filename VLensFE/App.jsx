@@ -196,10 +196,10 @@ function MainApp() {
     setActiveTab('chat');
   };
 
-  // Điều hướng sang Map: Chỉ cập nhật di tích được chọn vào Map
+  // Điều hướng sang Map: Cập nhật di tích được chọn vào Map và tạo mốc focus mới
   const handleNavigateToMap = (site = null) => {
     if (site) {
-      setMapFocusedSite(site);
+      setMapFocusedSite({ ...site, _focusAt: Date.now() });
       setSelectedSite(null);
     }
     setActiveTab('map');

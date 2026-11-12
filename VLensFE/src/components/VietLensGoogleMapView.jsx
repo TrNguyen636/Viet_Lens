@@ -437,13 +437,18 @@ function generateGoogleMapsWebGLHTML() {
     // Bay mượt đến tọa độ địa điểm
     window.flyTo = function(lat, lng, zoom, tilt, heading) {
       if (!map || lat == null || lng == null) return;
-      map.flyTo({
-        center: [Number(lng), Number(lat)],
-        zoom: zoom || 15.5,
-        pitch: tilt !== undefined ? tilt : map.getPitch(),
-        bearing: heading !== undefined ? heading : map.getBearing(),
-        duration: 1400,
-        essential: true
+      isNavigatingMode = false;
+      requestAnimationFrame(function() {
+        if (!map) return;
+        map.resize();
+        map.flyTo({
+          center: [Number(lng), Number(lat)],
+          zoom: zoom || 15.5,
+          pitch: tilt !== undefined ? tilt : map.getPitch(),
+          bearing: heading !== undefined ? heading : map.getBearing(),
+          duration: 900,
+          essential: true
+        });
       });
     };
 
@@ -657,10 +662,16 @@ const VietLensGoogleMapView = forwardRef(function VietLensGoogleMapView(
   ref
 ) {
   const webViewRef = useRef(null);
+  const isMapReadyRef = useRef(false);
   const pendingMarkersRef = useRef(null);
+  const pendingFlyToRef = useRef(null);
 
   useImperativeHandle(ref, () => ({
     flyTo: (lat, lng, zoom = 15.5, tilt, heading) => {
+      if (!isMapReadyRef.current) {
+        pendingFlyToRef.current = { lat, lng, zoom, tilt, heading };
+        return;
+      }
       const script = `if (typeof window.flyTo === 'function') { window.flyTo(${lat}, ${lng}, ${zoom}, ${tilt !== undefined ? tilt : 0}, ${heading !== undefined ? heading : 0}); } true;`;
       webViewRef.current?.injectJavaScript(script);
     },
@@ -722,9 +733,16 @@ const VietLensGoogleMapView = forwardRef(function VietLensGoogleMapView(
     try {
       const data = JSON.parse(event.nativeEvent.data);
       if (data.type === 'MAP_READY') {
+        isMapReadyRef.current = true;
         if (pendingMarkersRef.current) {
           const script = `if (typeof window.updateMarkers === 'function') { window.updateMarkers(${JSON.stringify(pendingMarkersRef.current)}); } true;`;
           webViewRef.current?.injectJavaScript(script);
+        }
+        if (pendingFlyToRef.current) {
+          const { lat, lng, zoom, tilt, heading } = pendingFlyToRef.current;
+          pendingFlyToRef.current = null;
+          const flyScript = `if (typeof window.flyTo === 'function') { window.flyTo(${lat}, ${lng}, ${zoom}, ${tilt !== undefined ? tilt : 0}, ${heading !== undefined ? heading : 0}); } true;`;
+          webViewRef.current?.injectJavaScript(flyScript);
         }
         if (onMapReady) onMapReady();
       } else if (data.type === 'MAP_LOADED') {

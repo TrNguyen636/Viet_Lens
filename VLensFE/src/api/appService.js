@@ -233,7 +233,21 @@ export const appService = {
     if (!uuidRegex.test(String(id))) {
       return null;
     }
-    return await axiosClient.get(`/api/heritage/${id}`);
+    try {
+      return await axiosClient.get(`/api/heritage/${id}`, {
+        timeout: FAST_HERITAGE_TIMEOUT_MS,
+      });
+    } catch (err) {
+      console.warn('[appService] /api/heritage/:id fallback to Supabase:', err?.message);
+      const { data, error } = await supabase
+        .from('heritage_info')
+        .select(HERITAGE_DIRECT_SELECT)
+        .eq('id', id)
+        .maybeSingle();
+      if (error || !data) return null;
+      const [translated] = await applySupabaseTranslations([data]);
+      return translated || null;
+    }
   },
 
   // ============================================================

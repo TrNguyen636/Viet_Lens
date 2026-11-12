@@ -127,31 +127,34 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
       .slice(0, 8);
   }, [search, allSearchableSites]);
 
-  // Tự động bay đến tọa độ địa danh nếu được chuyển hướng từ Camera hoặc Chat
+  // Tự động bay ngay đến tọa độ địa danh khi chuyển hướng từ DetailScreen, Camera hoặc Chat
+  const focusOnSite = (targetSite) => {
+    if (!targetSite) return;
+    const lat = Number(targetSite.latitude ?? targetSite.lat);
+    const lng = Number(targetSite.longitude ?? targetSite.lng);
+    if (isNaN(lat) || isNaN(lng) || lat === 0 || lng === 0) return;
+
+    setIsNavigating(false);
+    setNavTurnInfo(null);
+    setIsPannedDuringNav(false);
+    setRouteInfo(null);
+    setShowRadiusDrawer(false);
+    mapRef.current?.clearRoute();
+    mapRef.current?.clearRadiusCircle();
+
+    setSelectedMarkerSite(targetSite);
+    mapRef.current?.flyTo(lat, lng, 16.5, is3D ? 55 : 0, -20);
+  };
+
   const handleMapReady = () => {
     if (focusedSite) {
-      const lat = Number(focusedSite.latitude ?? focusedSite.lat);
-      const lng = Number(focusedSite.longitude ?? focusedSite.lng);
-      if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
-        mapRef.current?.flyTo(lat, lng, 16.5, is3D ? 55 : 0, -20);
-        setTimeout(() => {
-          setSelectedMarkerSite(focusedSite);
-        }, 1300);
-      }
+      focusOnSite(focusedSite);
     }
   };
 
   useEffect(() => {
     if (focusedSite) {
-      const lat = Number(focusedSite.latitude ?? focusedSite.lat);
-      const lng = Number(focusedSite.longitude ?? focusedSite.lng);
-      if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
-        mapRef.current?.flyTo(lat, lng, 16.5, is3D ? 55 : 0, -20);
-        const timer = setTimeout(() => {
-          setSelectedMarkerSite(focusedSite);
-        }, 1300);
-        return () => clearTimeout(timer);
-      }
+      focusOnSite(focusedSite);
     }
   }, [focusedSite]);
 
@@ -559,6 +562,7 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
       <VietLensGoogleMapView
         ref={mapRef}
         style={StyleSheet.absoluteFillObject}
+        onMapReady={handleMapReady}
         onSelectSite={(site) => {
           handleMarkerSelected(site);
         }}

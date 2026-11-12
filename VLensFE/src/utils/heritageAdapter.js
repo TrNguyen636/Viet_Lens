@@ -11,7 +11,7 @@ export const DEFAULT_HERITAGE_IMAGE =
  * Trích xuất đoạn tóm tắt ngắn từ mô tả dài của Backend
  */
 function extractSummary(text, maxLength = 160) {
-  if (!text) return 'Di tích lịch sử và danh lam văn hóa tiêu biểu của Việt Nam.';
+  if (!text) return '';
   // Loại bỏ các dấu gạch đầu dòng câu hỏi nếu có
   const clean = text.replace(/^-\s*/, '').trim();
   const firstSentence = clean.split('\n')[0];
@@ -35,7 +35,7 @@ export function adaptHeritage(item) {
   const longitude = item.longitude ?? item.lng ?? 108.2022;
 
   // Tên địa phương hiển thị
-  const locationName = item.province || item.address?.split(',')[0] || item.locationName || 'Việt Nam';
+  const locationName = item.province || item.address?.split(',')[0] || item.locationName || '';
 
   // Mô tả
   const description = item.description || item.summary || '';
@@ -44,9 +44,9 @@ export function adaptHeritage(item) {
   return {
     ...item,
     id: item.id?.toString() || Math.random().toString(),
-    name: item.name || 'Di sản văn hóa',
-    category: item.category || 'Văn hóa',
-    categoryLabel: item.categoryLabel || item.category || 'Di sản văn hóa',
+    name: item.name || '',
+    category: item.category || '',
+    categoryLabel: item.categoryLabel || item.category || '',
     province: item.province || '',
     address: item.address || locationName,
     locationName: locationName,
@@ -59,8 +59,8 @@ export function adaptHeritage(item) {
     description: description,
     summary: summary,
     shortDescription: summary,
-    dynasty: item.dynasty || item.category || 'Di sản văn hóa',
-    era: item.era || 'Di tích lịch sử văn hóa',
+    dynasty: item.dynasty || item.category || '',
+    era: item.era || '',
     distance: item.distance != null ? Number(item.distance) : null,
     // Cờ đánh dấu dữ liệu từ Backend thật
     isRealData: Boolean(item.id && (item.latitude || item.imageUrl)),

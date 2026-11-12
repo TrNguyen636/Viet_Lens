@@ -65,7 +65,16 @@
     "addressCopied": "住所をクリップボードにコピーしました！",
     "openMapDirect": "マップで見る",
     "storySection": "歴史と物語",
-    "locationSection": "所在地と情報"
+    "descriptionSection": "説明",
+    "locationSection": "所在地と情報",
+    "addressLabel": "遺跡の住所",
+    "updating": "更新中",
+    "locatingCoords": "位置確認中",
+    "defaultCategory": "文化遺産",
+    "bookmarkError": "現在お気に入りを更新できません。",
+    "shareTitle": "VietLens - ベトナムの遺産",
+    "shareFooter": "VietLensでベトナムの文化遺産を探検しましょう！",
+    "playingBadge": "再生中"
   },
   "chat": {
     "headerTitle": "AI 遺産アドバイザー",

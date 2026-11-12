@@ -65,7 +65,16 @@
     "addressCopied": "Đã sao chép địa chỉ vào bộ nhớ tạm!",
     "openMapDirect": "Xem trên Bản đồ",
     "storySection": "Câu chuyện & Lịch sử",
-    "locationSection": "Vị trí & Thông tin"
+    "descriptionSection": "Mô tả",
+    "locationSection": "Vị trí & Thông tin",
+    "addressLabel": "Địa chỉ di tích",
+    "updating": "Đang cập nhật",
+    "locatingCoords": "Đang xác định",
+    "defaultCategory": "Di sản văn hóa",
+    "bookmarkError": "Không thể cập nhật danh sách yêu thích lúc này.",
+    "shareTitle": "VietLens - Di sản Việt Nam",
+    "shareFooter": "Khám phá Di sản Văn hóa Việt Nam cùng ứng dụng VietLens!",
+    "playingBadge": "ĐANG PHÁT"
   },
   "chat": {
     "headerTitle": "Cố Vấn AI Di Sản",

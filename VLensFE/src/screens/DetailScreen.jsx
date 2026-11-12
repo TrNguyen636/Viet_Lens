@@ -71,7 +71,7 @@ export default function DetailScreen({ site: initialSite, onBack, onNavigateToCh
       isMounted = false;
       Speech.stop();
     };
-  }, [initialSite]);
+  }, [initialSite, i18n.language]);
 
   // 2. Tải danh sách di sản gợi ý cùng khu vực (Lân cận toạ độ)
   useEffect(() => {
@@ -96,7 +96,7 @@ export default function DetailScreen({ site: initialSite, onBack, onNavigateToCh
     return () => {
       isMounted = false;
     };
-  }, [site?.id, site?.latitude, site?.longitude]);
+  }, [site?.id, site?.latitude, site?.longitude, i18n.language]);
 
   // 3. Audio Guide TTS
   const toggleAudioGuide = () => {
@@ -141,7 +141,7 @@ export default function DetailScreen({ site: initialSite, onBack, onNavigateToCh
       if (err.response?.status === 401) {
         Alert.alert(t('common.unauthorized'), t('common.guestNotice'));
       } else {
-        Alert.alert(t('common.notice'), 'Không thể cập nhật danh sách yêu thích lúc này.');
+        Alert.alert(t('common.notice'), t('detail.bookmarkError'));
       }
     } finally {
       setIsTogglingBookmark(false);
@@ -152,8 +152,8 @@ export default function DetailScreen({ site: initialSite, onBack, onNavigateToCh
   const handleShare = async () => {
     try {
       await Share.share({
-        title: site?.name || 'VietLens - Di sản Việt Nam',
-        message: `${site?.name}\n📍 ${site?.address || site?.locationName}\n\n${site?.summary || site?.shortDescription || site?.description}\n\nKhám phá Di sản Văn hóa Việt Nam cùng ứng dụng VietLens!`,
+        title: site?.name || t('detail.shareTitle'),
+        message: `${site?.name}\n📍 ${site?.address || site?.locationName || t('detail.updating')}\n\n${site?.summary || site?.shortDescription || site?.description || t('detail.aboutDefault')}\n\n${t('detail.shareFooter')}`,
       });
     } catch (err) {
       console.warn('[DetailScreen] Share error:', err.message);
@@ -247,11 +247,15 @@ export default function DetailScreen({ site: initialSite, onBack, onNavigateToCh
           {/* Cover Bottom Gradient & Title Overlay */}
           <View style={styles.coverGradient}>
             <View style={styles.badgeRow}>
-              <View style={[styles.dynastyPill, { backgroundColor: theme.colors.amber }]}>
-                <Text style={styles.dynastyPillText}>{site?.dynasty || site?.category}</Text>
-              </View>
+              {site?.dynasty && site.dynasty !== site?.category ? (
+                <View style={[styles.dynastyPill, { backgroundColor: theme.colors.amber }]}>
+                  <Text style={styles.dynastyPillText}>{site.dynasty}</Text>
+                </View>
+              ) : null}
               <View style={styles.categoryPill}>
-                <Text style={styles.categoryPillText}>{site?.category || 'Di sản văn hóa'}</Text>
+                <Text style={styles.categoryPillText}>
+                  {site?.category || t('detail.defaultCategory')}
+                </Text>
               </View>
             </View>
 
@@ -262,77 +266,17 @@ export default function DetailScreen({ site: initialSite, onBack, onNavigateToCh
             <View style={styles.coverLocationRow}>
               <Ionicons name="location-sharp" size={14} color={theme.colors.yellow} />
               <Text style={styles.coverLocation} numberOfLines={1}>
-                {site?.address || site?.locationName}
+                {site?.address || site?.locationName || t('detail.updating')}
               </Text>
             </View>
           </View>
         </View>
 
         {/* ======================================================== */}
-        {/* 2. QUICK FACTS GRID (THÔNG SỐ NHANH)                     */}
-        {/* ======================================================== */}
-        <View style={styles.sectionContainer}>
-          <View style={styles.statsGrid}>
-            {/* Stat 1: Niên đại */}
-            <View style={[styles.statBox, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-              <Ionicons name="hourglass-outline" size={18} color={theme.colors.amber} />
-              <Text style={[styles.statLabel, { color: theme.colors.inkMuted }]}>{t('detail.era')}</Text>
-              <Text style={[styles.statValue, { color: theme.colors.ink }]} numberOfLines={1}>
-                {site?.dynasty || 'Cổ truyền'}
-              </Text>
-            </View>
-
-            {/* Stat 2: Phân loại */}
-            <View style={[styles.statBox, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-              <Ionicons name="ribbon-outline" size={18} color={theme.colors.red} />
-              <Text style={[styles.statLabel, { color: theme.colors.inkMuted }]}>{t('detail.category')}</Text>
-              <Text style={[styles.statValue, { color: theme.colors.ink }]} numberOfLines={1}>
-                {site?.category || 'Văn hóa'}
-              </Text>
-            </View>
-
-            {/* Stat 3: Địa phương */}
-            <View style={[styles.statBox, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-              <Ionicons name="map-outline" size={18} color={theme.colors.green || '#2E7D32'} />
-              <Text style={[styles.statLabel, { color: theme.colors.inkMuted }]}>{t('detail.province')}</Text>
-              <Text style={[styles.statValue, { color: theme.colors.ink }]} numberOfLines={1}>
-                {site?.province || site?.locationName || 'Việt Nam'}
-              </Text>
-            </View>
-
-            {/* Stat 4: Khoảng cách GPS */}
-            <View style={[styles.statBox, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-              <Ionicons name="navigate-outline" size={18} color={theme.colors.yellow} />
-              <Text style={[styles.statLabel, { color: theme.colors.inkMuted }]}>{t('detail.distance')}</Text>
-              <Text style={[styles.statValue, { color: theme.colors.ink }]} numberOfLines={1}>
-                {site?.distance != null ? `~${site.distance} km` : t('home.locating')}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* ======================================================== */}
-        {/* 3. QUICK ACTION TOOLBAR (THANH TÁC VỤ TIỆN ÍCH)           */}
+        {/* 2. QUICK ACTION TOOLBAR (THANH TÁC VỤ TIỆN ÍCH)           */}
         {/* ======================================================== */}
         <View style={styles.sectionContainer}>
           <View style={[styles.actionsToolbar, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-            <TouchableOpacity
-              style={styles.actionBtnItem}
-              onPress={toggleAudioGuide}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.actionIconCircle, { backgroundColor: isPlayingAudio ? theme.colors.red : '#FFF3E0' }]}>
-                <Ionicons
-                  name={isPlayingAudio ? 'pause' : 'volume-high'}
-                  size={20}
-                  color={isPlayingAudio ? '#FFF' : theme.colors.amber}
-                />
-              </View>
-              <Text style={[styles.actionBtnLabel, { color: theme.colors.ink }]}>
-                {isPlayingAudio ? t('detail.audioPause') : 'Audio Guide'}
-              </Text>
-            </TouchableOpacity>
-
             <TouchableOpacity
               style={styles.actionBtnItem}
               onPress={handleNavigateToMapDirect}
@@ -355,7 +299,7 @@ export default function DetailScreen({ site: initialSite, onBack, onNavigateToCh
                 <MaterialCommunityIcons name="robot-outline" size={20} color={theme.colors.red} />
               </View>
               <Text style={[styles.actionBtnLabel, { color: theme.colors.ink }]}>
-                Cố vấn AI
+                {t('nav.chat')}
               </Text>
             </TouchableOpacity>
 
@@ -375,7 +319,7 @@ export default function DetailScreen({ site: initialSite, onBack, onNavigateToCh
         </View>
 
         {/* ======================================================== */}
-        {/* 4. AUDIO GUIDE PLAYER CARD (TRÌNH THUYẾT MINH AI)         */}
+        {/* 3. AUDIO GUIDE PLAYER CARD (TRÌNH THUYẾT MINH AI)         */}
         {/* ======================================================== */}
         <View style={styles.sectionContainer}>
           <View style={[styles.audioGuideCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
@@ -393,7 +337,7 @@ export default function DetailScreen({ site: initialSite, onBack, onNavigateToCh
                   {isPlayingAudio && (
                     <View style={styles.liveAudioBadge}>
                       <View style={styles.liveAudioDot} />
-                      <Text style={styles.liveAudioText}>PLAYING</Text>
+                      <Text style={styles.liveAudioText}>{t('detail.playingBadge')}</Text>
                     </View>
                   )}
                 </View>
@@ -433,7 +377,7 @@ export default function DetailScreen({ site: initialSite, onBack, onNavigateToCh
         </View>
 
         {/* ======================================================== */}
-        {/* 5. CÂU CHUYỆN VĂN HÓA & LỊCH SỬ (STORY & DESCRIPTION)     */}
+        {/* 4. MÔ TẢ DI SẢN (DESCRIPTION)                            */}
         {/* ======================================================== */}
         <View style={styles.sectionContainer}>
           <View style={[styles.cardBox, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
@@ -441,20 +385,10 @@ export default function DetailScreen({ site: initialSite, onBack, onNavigateToCh
               <View style={styles.cardHeaderLeft}>
                 <Ionicons name="book-outline" size={18} color={theme.colors.red} />
                 <Text style={[styles.cardSectionTitle, { color: theme.colors.ink }]}>
-                  {t('detail.storySection')}
+                  {t('detail.descriptionSection')}
                 </Text>
               </View>
             </View>
-
-            {/* Trích dẫn tóm tắt nổi bật (Highlight Quote) */}
-            {site?.summary && (
-              <View style={[styles.highlightBox, { backgroundColor: isDark ? '#26231F' : '#FBF7EE', borderColor: theme.colors.border }]}>
-                <Ionicons name="quote" size={18} color={theme.colors.amber} style={{ marginBottom: 4 }} />
-                <Text style={[styles.highlightText, { color: theme.colors.ink }]}>
-                  {site.summary}
-                </Text>
-              </View>
-            )}
 
             {/* Nội dung chi tiết với tính năng Xem thêm / Thu gọn */}
             <Text style={[styles.contentParagraph, { color: theme.colors.ink }]}>
@@ -518,9 +452,9 @@ export default function DetailScreen({ site: initialSite, onBack, onNavigateToCh
               <View style={styles.locationItemRow}>
                 <Ionicons name="business-outline" size={16} color={theme.colors.amber} style={styles.locIcon} />
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.locItemTitle, { color: theme.colors.inkMuted }]}>Địa chỉ di tích</Text>
+                  <Text style={[styles.locItemTitle, { color: theme.colors.inkMuted }]}>{t('detail.addressLabel')}</Text>
                   <Text style={[styles.locItemValue, { color: theme.colors.ink }]}>
-                    {site?.address || site?.locationName || 'Đang cập nhật'}
+                    {site?.address || site?.locationName || t('detail.updating')}
                   </Text>
                 </View>
               </View>
@@ -532,7 +466,7 @@ export default function DetailScreen({ site: initialSite, onBack, onNavigateToCh
                   <Text style={[styles.locItemValue, { color: theme.colors.ink }]}>
                     {site?.latitude != null && site?.longitude != null
                       ? `${site.latitude.toFixed(5)}° N, ${site.longitude.toFixed(5)}° E`
-                      : 'Đang xác định'}
+                      : t('detail.locatingCoords')}
                   </Text>
                 </View>
               </View>
@@ -746,34 +680,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginTop: 14,
   },
-  statsGrid: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  statBox: {
-    flex: 1,
-    borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 6,
-    alignItems: 'center',
-    borderWidth: 1,
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-  },
-  statLabel: {
-    fontSize: 10,
-    marginTop: 4,
-    fontWeight: '500',
-  },
-  statValue: {
-    fontSize: 12,
-    fontWeight: '700',
-    marginTop: 2,
-    textAlign: 'center',
-  },
   actionsToolbar: {
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -901,17 +807,6 @@ const styles = StyleSheet.create({
   cardSectionTitle: {
     fontSize: 15.5,
     fontWeight: '700',
-  },
-  highlightBox: {
-    padding: 12,
-    borderRadius: 10,
-    borderLeftWidth: 3,
-    marginBottom: 12,
-  },
-  highlightText: {
-    fontSize: 13,
-    lineHeight: 19,
-    fontStyle: 'italic',
   },
   contentParagraph: {
     fontSize: 14,
