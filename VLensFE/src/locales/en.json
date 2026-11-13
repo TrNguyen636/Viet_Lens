@@ -33,7 +33,19 @@
     "relicCountUnit": "relics",
     "categoriesTitle": "Heritage Categories",
     "emptySearchTitle": "No matching heritage found",
-    "emptySearchSub": "Try searching with different keywords or switch categories"
+    "emptySearchSub": "Try searching with different keywords or switch categories",
+    "allProvinces": "All Cities & Provinces",
+    "filterByProvince": "Filter by province",
+    "selectProvinceModalTitle": "Select City / Province",
+    "searchProvincePlaceholder": "Search city or province...",
+    "allProvincesCount": "All ({{count}} heritages)",
+    "loadMore": "Show {{count}} more relics",
+    "collapse": "Collapse list",
+    "showingCount": "Showing {{shown}} of {{total}} heritages",
+    "page": "Page",
+    "modePaged": "By page",
+    "modeContinuous": "Continuous",
+    "clearFilter": "Clear"
   },
   "detail": {
     "audioGuideTitle": "AI Audio Guide Narration",

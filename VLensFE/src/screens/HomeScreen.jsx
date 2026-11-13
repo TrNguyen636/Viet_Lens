@@ -10,6 +10,9 @@ import {
   Dimensions,
   ActivityIndicator,
   RefreshControl,
+  Modal,
+  FlatList,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -21,6 +24,7 @@ import useUserLocation from '../hooks/useUserLocation';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.72;
+const PAGE_SIZE = 12;
 
 export default function HomeScreen({ user, onSelectSite, onNavigateToCamera, onNavigateToMap, onNavigateToProfile }) {
   const { t, i18n } = useTranslation();
@@ -38,6 +42,15 @@ export default function HomeScreen({ user, onSelectSite, onNavigateToCamera, onN
   const masterSitesRef = useRef([]);
   const userCoordsRef = useRef(userCoords);
   const lastNearbyCoordsRef = useRef(null);
+  const scrollRef = useRef(null);
+
+  // Bộ lọc Tỉnh/Thành phố & Phân trang
+  const [selectedProvince, setSelectedProvince] = useState('all');
+  const [isProvinceModalVisible, setIsProvinceModalVisible] = useState(false);
+  const [provinceSearchQuery, setProvinceSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [viewMode, setViewMode] = useState('paged'); // 'paged' (theo trang) | 'continuous' (xem thêm nối tiếp)
+  const [continuousCount, setContinuousCount] = useState(PAGE_SIZE);
 
   useEffect(() => {
     userCoordsRef.current = userCoords;
@@ -170,19 +183,114 @@ export default function HomeScreen({ user, onSelectSite, onNavigateToCamera, onN
     };
   }, [search]);
 
-  // Lọc theo từ khóa tìm kiếm trên client
-  const filteredSites = useMemo(() => {
-    if (!search.trim()) return allSites;
-    const query = search.trim().toLowerCase();
-    return allSites.filter((site) => {
-      return (
-        site.name?.toLowerCase().includes(query) ||
-        site.locationName?.toLowerCase().includes(query) ||
-        site.province?.toLowerCase().includes(query) ||
-        site.dynasty?.toLowerCase().includes(query)
-      );
+  // Danh sách các Tỉnh / Thành phố được trích xuất tự động từ CSDL
+  const provinceList = useMemo(() => {
+    const map = new Map();
+    allSites.forEach((site) => {
+      const p = site.province?.trim() || site.locationName?.trim();
+      if (p) {
+        map.set(p, (map.get(p) || 0) + 1);
+      }
     });
-  }, [allSites, search]);
+
+    const list = Array.from(map.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+
+    return [
+      { name: 'all', label: t('home.allProvinces'), count: allSites.length },
+      ...list,
+    ];
+  }, [allSites, t]);
+
+  // Lọc danh sách tỉnh thành trong modal tìm kiếm
+  const filteredProvinceList = useMemo(() => {
+    if (!provinceSearchQuery.trim()) return provinceList;
+    const q = provinceSearchQuery.trim().toLowerCase();
+    return provinceList.filter((item) => {
+      const name = item.name === 'all' ? t('home.allProvinces').toLowerCase() : item.name.toLowerCase();
+      return name.includes(q);
+    });
+  }, [provinceList, provinceSearchQuery, t]);
+
+  // Lọc theo từ khóa tìm kiếm và theo Tỉnh/Thành phố
+  const filteredSites = useMemo(() => {
+    let result = allSites;
+
+    // 1. Lọc theo tỉnh thành đã chọn
+    if (selectedProvince && selectedProvince !== 'all') {
+      result = result.filter((site) => {
+        const p = site.province?.trim() || site.locationName?.trim() || '';
+        return p.toLowerCase() === selectedProvince.toLowerCase();
+      });
+    }
+
+    // 2. Lọc theo từ khóa tìm kiếm
+    if (search.trim()) {
+      const query = search.trim().toLowerCase();
+      result = result.filter((site) => {
+        return (
+          site.name?.toLowerCase().includes(query) ||
+          site.locationName?.toLowerCase().includes(query) ||
+          site.province?.toLowerCase().includes(query) ||
+          site.dynasty?.toLowerCase().includes(query)
+        );
+      });
+    }
+
+    return result;
+  }, [allSites, selectedProvince, search]);
+
+  // Reset trang và số lượng hiển thị khi đổi bộ lọc
+  useEffect(() => {
+    setCurrentPage(1);
+    setContinuousCount(PAGE_SIZE);
+  }, [selectedProvince, search]);
+
+  // Tính toán phân trang
+  const totalItems = filteredSites.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+
+  // Danh sách di tích thực tế được hiển thị trên giao diện
+  const displayedSites = useMemo(() => {
+    if (viewMode === 'paged') {
+      const start = (currentPage - 1) * PAGE_SIZE;
+      return filteredSites.slice(start, start + PAGE_SIZE);
+    } else {
+      return filteredSites.slice(0, continuousCount);
+    }
+  }, [filteredSites, viewMode, currentPage, continuousCount]);
+
+  // Chuyển trang mượt mà
+  const handleSelectPage = (pageNumber) => {
+    if (pageNumber < 1 || pageNumber > totalPages || pageNumber === currentPage) return;
+    setCurrentPage(pageNumber);
+  };
+
+  // Nút xem thêm trong chế độ nối tiếp
+  const handleLoadMore = () => {
+    setContinuousCount((prev) => Math.min(prev + PAGE_SIZE, totalItems));
+  };
+
+  const handleCollapse = () => {
+    setContinuousCount(PAGE_SIZE);
+  };
+
+  // Tạo dải số trang dạng [ 1 ] [ 2 ] [ 3 ] ... [ N ]
+  const paginationRange = useMemo(() => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    const pages = [];
+    if (currentPage <= 4) {
+      pages.push(1, 2, 3, 4, 5, '...', totalPages);
+    } else if (currentPage >= totalPages - 3) {
+      pages.push(1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+    } else {
+      pages.push(1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages);
+    }
+    return pages;
+  }, [totalPages, currentPage]);
 
   // Xử lý lỗi load ảnh: ghi nhận ID để fallback sang placeholder
   const handleImageError = (siteId) => {
@@ -205,6 +313,7 @@ export default function HomeScreen({ user, onSelectSite, onNavigateToCamera, onN
 
   return (
     <ScrollView
+      ref={scrollRef}
       style={[styles.container, { backgroundColor: theme.colors.bg }]}
       showsVerticalScrollIndicator={false}
       refreshControl={
@@ -343,17 +452,92 @@ export default function HomeScreen({ user, onSelectSite, onNavigateToCamera, onN
         </View>
       </TouchableOpacity>
 
-      {/* Tiêu đề danh sách Di sản */}
+      {/* Tiêu đề danh sách Di sản & Bộ lọc Tỉnh/Thành phố */}
       <View style={styles.sectionRow}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>
-          {t('home.exploreSectionTitle')}
-        </Text>
-        <Text style={{ fontSize: 13, color: theme.colors.inkMuted }}>
-          {filteredSites.length} {t('home.relicCountUnit')}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>
+            {t('home.exploreSectionTitle')}
+          </Text>
+          <View style={[styles.countPill, { backgroundColor: isDark ? '#2D2820' : theme.colors.parchment }]}>
+            <Text style={[styles.countPillText, { color: theme.colors.amber }]}>
+              {filteredSites.length} {t('home.relicCountUnit')}
+            </Text>
+          </View>
+        </View>
+
+        {/* Nút chuyển chế độ: Phân trang (Tab 1 2 3) / Cuộn nối tiếp */}
+        <View style={[styles.modeSwitchWrap, { backgroundColor: isDark ? '#26231F' : '#EFEAE1' }]}>
+          <TouchableOpacity
+            style={[styles.modeSwitchBtn, viewMode === 'paged' && [styles.modeSwitchBtnActive, { backgroundColor: theme.colors.card }]]}
+            onPress={() => setViewMode('paged')}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="documents-outline" size={13} color={viewMode === 'paged' ? theme.colors.red : theme.colors.inkMuted} />
+            <Text style={[styles.modeSwitchText, { color: viewMode === 'paged' ? theme.colors.red : theme.colors.inkMuted }]}>
+              {t('home.modePaged')}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.modeSwitchBtn, viewMode === 'continuous' && [styles.modeSwitchBtnActive, { backgroundColor: theme.colors.card }]]}
+            onPress={() => setViewMode('continuous')}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="infinite-outline" size={14} color={viewMode === 'continuous' ? theme.colors.red : theme.colors.inkMuted} />
+            <Text style={[styles.modeSwitchText, { color: viewMode === 'continuous' ? theme.colors.red : theme.colors.inkMuted }]}>
+              {t('home.modeContinuous')}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* Lưới Danh sách Tất cả Di sản Văn Hóa */}
+      {/* Thanh Dropdown Chọn Tỉnh/Thành phố Hiện Đại */}
+      <View style={styles.filterBarContainer}>
+        <TouchableOpacity
+          style={[styles.dropdownBar, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
+          onPress={() => {
+            setProvinceSearchQuery('');
+            setIsProvinceModalVisible(true);
+          }}
+          activeOpacity={0.8}
+        >
+          <View style={styles.dropdownLeft}>
+            <View style={[styles.dropdownIconCircle, { backgroundColor: isDark ? '#3E2723' : '#FFEBEE' }]}>
+              <Ionicons name="location" size={16} color={theme.colors.red} />
+            </View>
+            <View style={{ flex: 1, paddingRight: 6 }}>
+              <Text style={[styles.dropdownSubLabel, { color: theme.colors.inkMuted }]}>
+                {t('home.filterByProvince')}
+              </Text>
+              <Text style={[styles.dropdownMainValue, { color: theme.colors.ink }]} numberOfLines={1}>
+                {selectedProvince === 'all'
+                  ? t('home.allProvincesCount', { count: allSites.length })
+                  : `${selectedProvince} (${filteredSites.length} ${t('home.relicCountUnit')})`}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.dropdownRightAction}>
+            {selectedProvince !== 'all' ? (
+              <TouchableOpacity
+                style={styles.clearFilterBadge}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  setSelectedProvince('all');
+                }}
+              >
+                <Ionicons name="close-circle" size={18} color={theme.colors.red} />
+                <Text style={[styles.clearFilterText, { color: theme.colors.red }]}>
+                  {t('home.clearFilter')}
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <Ionicons name="chevron-down" size={18} color={theme.colors.inkMuted} />
+            )}
+          </View>
+        </TouchableOpacity>
+      </View>
+
+      {/* Lưới Danh sách Di sản Văn Hóa (Được phân trang/giới hạn) */}
       <View style={styles.listContainer}>
         {isLoading ? (
           <View style={styles.loadingBox}>
@@ -371,9 +555,19 @@ export default function HomeScreen({ user, onSelectSite, onNavigateToCamera, onN
             <Text style={[styles.emptySub, { color: theme.colors.inkMuted }]}>
               {t('home.emptySearchSub')}
             </Text>
+            {selectedProvince !== 'all' && (
+              <TouchableOpacity
+                style={[styles.resetFilterBtn, { borderColor: theme.colors.red }]}
+                onPress={() => setSelectedProvince('all')}
+              >
+                <Text style={{ color: theme.colors.red, fontWeight: '700', fontSize: 13 }}>
+                  {t('home.allProvinces')}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         ) : (
-          filteredSites.map((site) => (
+          displayedSites.map((site) => (
             <TouchableOpacity
               key={`site-${site.id}`}
               style={[styles.siteCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
@@ -434,9 +628,224 @@ export default function HomeScreen({ user, onSelectSite, onNavigateToCamera, onN
             </TouchableOpacity>
           ))
         )}
+
+        {/* Thanh Điều Hướng Phân Trang Hoặc Nút Xem Thêm */}
+        {!isLoading && filteredSites.length > 0 && (
+          <View style={styles.paginationSection}>
+            {/* Chế độ 1: Phân trang dạng Tab 1 2 3 ... N */}
+            {viewMode === 'paged' && totalPages > 1 && (
+              <View style={styles.pagedControlsWrapper}>
+                <Text style={[styles.pageStatusText, { color: theme.colors.inkMuted }]}>
+                  {t('home.page')} {currentPage} / {totalPages} ({t('home.showingCount', { shown: displayedSites.length, total: totalItems })})
+                </Text>
+
+                <View style={styles.paginationRow}>
+                  {/* Nút Trước */}
+                  <TouchableOpacity
+                    style={[
+                      styles.pageNavBtn,
+                      { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
+                      currentPage === 1 && styles.pageNavBtnDisabled,
+                    ]}
+                    disabled={currentPage === 1}
+                    onPress={() => handleSelectPage(currentPage - 1)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="chevron-back" size={18} color={currentPage === 1 ? theme.colors.inkLight : theme.colors.ink} />
+                  </TouchableOpacity>
+
+                  {/* Dải số trang */}
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pageNumberScroll}>
+                    {paginationRange.map((p, idx) => {
+                      if (p === '...') {
+                        return (
+                          <View key={`dots-${idx}`} style={styles.pageEllipsis}>
+                            <Text style={[styles.pageEllipsisText, { color: theme.colors.inkMuted }]}>...</Text>
+                          </View>
+                        );
+                      }
+                      const isActive = p === currentPage;
+                      return (
+                        <TouchableOpacity
+                          key={`page-${p}`}
+                          style={[
+                            styles.pageNumberBtn,
+                            { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
+                            isActive && [styles.pageNumberBtnActive, { backgroundColor: theme.colors.red, borderColor: theme.colors.red }],
+                          ]}
+                          onPress={() => handleSelectPage(p)}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={[styles.pageNumberText, { color: theme.colors.ink }, isActive && styles.pageNumberTextActive]}>
+                            {p}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+
+                  {/* Nút Sau */}
+                  <TouchableOpacity
+                    style={[
+                      styles.pageNavBtn,
+                      { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
+                      currentPage === totalPages && styles.pageNavBtnDisabled,
+                    ]}
+                    disabled={currentPage === totalPages}
+                    onPress={() => handleSelectPage(currentPage + 1)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="chevron-forward" size={18} color={currentPage === totalPages ? theme.colors.inkLight : theme.colors.ink} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {/* Chế độ 2: Nút Xem Thêm Nối Tiếp */}
+            {viewMode === 'continuous' && (
+              <View style={styles.continuousControlsWrapper}>
+                <Text style={[styles.pageStatusText, { color: theme.colors.inkMuted }]}>
+                  {t('home.showingCount', { shown: displayedSites.length, total: totalItems })}
+                </Text>
+
+                {displayedSites.length < totalItems ? (
+                  <TouchableOpacity
+                    style={[styles.loadMoreBtn, { backgroundColor: theme.colors.card, borderColor: theme.colors.red }]}
+                    onPress={handleLoadMore}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="add-circle-outline" size={18} color={theme.colors.red} />
+                    <Text style={[styles.loadMoreText, { color: theme.colors.red }]}>
+                      {t('home.loadMore', { count: Math.min(PAGE_SIZE, totalItems - displayedSites.length) })}
+                    </Text>
+                  </TouchableOpacity>
+                ) : totalItems > PAGE_SIZE ? (
+                  <TouchableOpacity
+                    style={[styles.loadMoreBtn, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
+                    onPress={handleCollapse}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="chevron-up" size={18} color={theme.colors.inkMuted} />
+                    <Text style={[styles.loadMoreText, { color: theme.colors.inkMuted }]}>
+                      {t('home.collapse')}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            )}
+          </View>
+        )}
       </View>
 
       <View style={{ height: 100 }} />
+
+      {/* Modal / Bottom Sheet Chọn Tỉnh / Thành Phố */}
+      <Modal
+        visible={isProvinceModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setIsProvinceModalVisible(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setIsProvinceModalVisible(false)}>
+          <View style={styles.modalOverlay}>
+            <TouchableWithoutFeedback onPress={() => {}}>
+              <View style={[styles.provinceModalSheet, { backgroundColor: theme.colors.card }]}>
+                {/* Thanh Kéo Sheet */}
+                <View style={styles.sheetHandleWrap}>
+                  <View style={[styles.sheetHandle, { backgroundColor: theme.colors.border }]} />
+                </View>
+
+                {/* Tiêu đề Modal */}
+                <View style={styles.modalHeaderRow}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Ionicons name="location" size={20} color={theme.colors.red} />
+                    <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>
+                      {t('home.selectProvinceModalTitle')}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setIsProvinceModalVisible(false)}
+                    style={styles.modalCloseBtn}
+                  >
+                    <Ionicons name="close" size={22} color={theme.colors.inkMuted} />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Ô Tìm Tỉnh Nhanh */}
+                <View style={[styles.modalSearchBox, { backgroundColor: isDark ? '#2D2820' : '#F5F2EB', borderColor: theme.colors.border }]}>
+                  <Ionicons name="search" size={18} color={theme.colors.inkMuted} />
+                  <TextInput
+                    style={[styles.modalSearchInput, { color: theme.colors.ink }]}
+                    placeholder={t('home.searchProvincePlaceholder')}
+                    placeholderTextColor={theme.colors.inkLight}
+                    value={provinceSearchQuery}
+                    onChangeText={setProvinceSearchQuery}
+                    autoCapitalize="none"
+                  />
+                  {provinceSearchQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => setProvinceSearchQuery('')}>
+                      <Ionicons name="close-circle" size={16} color={theme.colors.inkMuted} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Danh Sách Tỉnh Thành */}
+                <FlatList
+                  data={filteredProvinceList}
+                  keyExtractor={(item) => `prov-${item.name}`}
+                  keyboardShouldPersistTaps="handled"
+                  contentContainerStyle={{ paddingBottom: 24 }}
+                  renderItem={({ item }) => {
+                    const isSelected = selectedProvince === item.name;
+                    return (
+                      <TouchableOpacity
+                        style={[
+                          styles.provinceItemRow,
+                          { borderBottomColor: theme.colors.border },
+                          isSelected && [styles.provinceItemRowSelected, { backgroundColor: isDark ? '#3E2723' : '#FFEBEE' }],
+                        ]}
+                        onPress={() => {
+                          setSelectedProvince(item.name);
+                          setIsProvinceModalVisible(false);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.provinceItemLeft}>
+                          <Ionicons
+                            name={item.name === 'all' ? 'globe-outline' : 'business-outline'}
+                            size={18}
+                            color={isSelected ? theme.colors.red : theme.colors.amber}
+                          />
+                          <Text
+                            style={[
+                              styles.provinceItemName,
+                              { color: theme.colors.ink },
+                              isSelected && { color: theme.colors.red, fontWeight: '700' },
+                            ]}
+                          >
+                            {item.label || item.name}
+                          </Text>
+                        </View>
+
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <View style={[styles.provinceCountBadge, { backgroundColor: isDark ? '#2D2820' : theme.colors.parchment }]}>
+                            <Text style={[styles.provinceCountText, { color: theme.colors.inkMuted }]}>
+                              {item.count} {t('home.relicCountUnit')}
+                            </Text>
+                          </View>
+                          {isSelected && (
+                            <Ionicons name="checkmark-circle" size={18} color={theme.colors.red} />
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  }}
+                />
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </ScrollView>
   );
 }
@@ -782,5 +1191,281 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingRight: 8,
+  },
+  // Bổ sung Styles cho Bộ Lọc Tỉnh & Phân Trang
+  countPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  countPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  modeSwitchWrap: {
+    flexDirection: 'row',
+    borderRadius: 10,
+    padding: 3,
+    gap: 2,
+  },
+  modeSwitchBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  modeSwitchBtnActive: {
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+  },
+  modeSwitchText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  filterBarContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 8,
+  },
+  dropdownBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+  },
+  dropdownLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  dropdownIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dropdownSubLabel: {
+    fontSize: 10.5,
+    fontWeight: '500',
+    marginBottom: 1,
+  },
+  dropdownMainValue: {
+    fontSize: 13.5,
+    fontWeight: '700',
+  },
+  dropdownRightAction: {
+    paddingLeft: 6,
+  },
+  clearFilterBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFEBEE',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  clearFilterText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  resetFilterBtn: {
+    marginTop: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  paginationSection: {
+    marginTop: 16,
+    paddingBottom: 8,
+  },
+  pagedControlsWrapper: {
+    alignItems: 'center',
+    gap: 12,
+  },
+  pageStatusText: {
+    fontSize: 12,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  paginationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    width: '100%',
+  },
+  pageNavBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pageNavBtnDisabled: {
+    opacity: 0.35,
+  },
+  pageNumberScroll: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 4,
+  },
+  pageNumberBtn: {
+    minWidth: 36,
+    height: 36,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pageNumberBtnActive: {
+    elevation: 2,
+    shadowColor: '#C62828',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+  },
+  pageNumberText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  pageNumberTextActive: {
+    color: '#FFF',
+  },
+  pageEllipsis: {
+    width: 24,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pageEllipsisText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  continuousControlsWrapper: {
+    alignItems: 'center',
+    gap: 10,
+  },
+  loadMoreBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    width: '100%',
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+  },
+  loadMoreText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+  },
+  // Styles Modal Sheet Chọn Tỉnh Thành
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'flex-end',
+  },
+  provinceModalSheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 10,
+    paddingHorizontal: 20,
+    maxHeight: '80%',
+    elevation: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+  },
+  sheetHandleWrap: {
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  sheetHandle: {
+    width: 40,
+    height: 4.5,
+    borderRadius: 3,
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  modalCloseBtn: {
+    padding: 4,
+  },
+  modalSearchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginVertical: 10,
+    gap: 8,
+  },
+  modalSearchInput: {
+    flex: 1,
+    fontSize: 13.5,
+  },
+  provinceItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 6,
+    borderBottomWidth: 0.5,
+    borderRadius: 10,
+  },
+  provinceItemRowSelected: {
+    paddingHorizontal: 10,
+  },
+  provinceItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  provinceItemName: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  provinceCountBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  provinceCountText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
 });

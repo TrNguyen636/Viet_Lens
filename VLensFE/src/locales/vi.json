@@ -33,7 +33,19 @@
     "relicCountUnit": "di tích",
     "categoriesTitle": "Danh mục di sản",
     "emptySearchTitle": "Không tìm thấy di tích phù hợp",
-    "emptySearchSub": "Thử tìm kiếm với từ khóa khác hoặc chuyển danh mục"
+    "emptySearchSub": "Thử tìm kiếm với từ khóa khác hoặc chuyển danh mục",
+    "allProvinces": "Tất cả tỉnh thành",
+    "filterByProvince": "Lọc theo tỉnh thành",
+    "selectProvinceModalTitle": "Chọn Tỉnh / Thành Phố",
+    "searchProvincePlaceholder": "Tìm tên tỉnh thành...",
+    "allProvincesCount": "Tất cả ({{count}} di sản)",
+    "loadMore": "Xem thêm {{count}} di tích",
+    "collapse": "Thu gọn danh sách",
+    "showingCount": "Đang hiển thị {{shown}} / {{total}} di sản",
+    "page": "Trang",
+    "modePaged": "Theo trang",
+    "modeContinuous": "Nối tiếp",
+    "clearFilter": "Xóa lọc"
   },
   "detail": {
     "audioGuideTitle": "Thuyết Minh Audio Guide AI",

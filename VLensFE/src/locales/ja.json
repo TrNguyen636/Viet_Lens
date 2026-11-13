@@ -33,7 +33,19 @@
     "relicCountUnit": "件の遺産",
     "categoriesTitle": "遺産カテゴリー",
     "emptySearchTitle": "該当する遺産が見つかりませんでした",
-    "emptySearchSub": "別のキーワードで検索するか、カテゴリーを変更してください"
+    "emptySearchSub": "別のキーワードで検索するか、カテゴリーを変更してください",
+    "allProvinces": "すべての地域・都市",
+    "filterByProvince": "地域で絞り込む",
+    "selectProvinceModalTitle": "都市・地域を選択",
+    "searchProvincePlaceholder": "地域名を検索...",
+    "allProvincesCount": "すべて ({{count}}件の遺産)",
+    "loadMore": "さらに{{count}}件表示",
+    "collapse": "リストを折りたたむ",
+    "showingCount": "{{total}}件中{{shown}}件を表示",
+    "page": "ページ",
+    "modePaged": "ページ毎",
+    "modeContinuous": "連続表示",
+    "clearFilter": "解除"
   },
   "detail": {
     "audioGuideTitle": "AI 音声ガイド解説",
