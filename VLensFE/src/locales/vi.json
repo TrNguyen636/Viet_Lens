@@ -45,7 +45,9 @@
     "page": "Trang",
     "modePaged": "Theo trang",
     "modeContinuous": "Nối tiếp",
-    "clearFilter": "Xóa lọc"
+    "clearFilter": "Xóa lọc",
+    "offlineNotice": "Chế độ ngoại tuyến — Dữ liệu đã sẵn sàng",
+    "onlineRestored": "Đã khôi phục kết nối mạng"
   },
   "detail": {
     "audioGuideTitle": "Thuyết Minh Audio Guide AI",

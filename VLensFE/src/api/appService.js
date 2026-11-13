@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axiosClient from './axiosClient';
 import { supabase } from '../services/supabase';
 import { haversineDistanceKm } from '../utils/dijkstraRouter';
+import { getOfflineHeritages, saveOfflineHeritages } from '../services/offlineStorageService';
 
 const HERITAGE_DIRECT_SELECT =
   'id, name, description, category, province, address, latitude, longitude, image_url';
@@ -95,13 +96,30 @@ export const appService = {
    */
   getAllHeritage: async () => {
     try {
-      return await axiosClient.get('/api/heritage/all', {
+      const data = await axiosClient.get('/api/heritage/all', {
         timeout: FAST_HERITAGE_TIMEOUT_MS,
       });
+      if (Array.isArray(data) && data.length > 0) {
+        saveOfflineHeritages(data).catch(() => {});
+        return data;
+      }
     } catch (err) {
       console.warn('[appService] /api/heritage/all fallback to Supabase:', err?.message);
-      return await fetchHeritageFromSupabaseDirect();
     }
+
+    try {
+      const sbData = await fetchHeritageFromSupabaseDirect();
+      if (Array.isArray(sbData) && sbData.length > 0) {
+        saveOfflineHeritages(sbData).catch(() => {});
+        return sbData;
+      }
+    } catch (sbErr) {
+      console.warn('[appService] fetchHeritageFromSupabaseDirect error, fallback to offlineStorage:', sbErr?.message);
+    }
+
+    // Dự phòng ngoại tuyến cấp cao nhất: AsyncStorage / Seed Data
+    const lang = (await AsyncStorage.getItem('user_preferred_language')) || 'vi';
+    return await getOfflineHeritages(lang);
   },
 
   /**
@@ -111,15 +129,21 @@ export const appService = {
    * @returns {Promise<Array>} List<HeritageResponseDTO>
    */
   searchHeritage: async (keyword) => {
+    const q = String(keyword || '').trim().toLowerCase();
     try {
       return await axiosClient.get('/api/heritage/search', {
         params: { keyword },
         timeout: FAST_HERITAGE_TIMEOUT_MS,
       });
     } catch (err) {
-      console.warn('[appService] /api/heritage/search fallback to Supabase:', err?.message);
-      const all = await fetchHeritageFromSupabaseDirect();
-      const q = String(keyword || '').trim().toLowerCase();
+      console.warn('[appService] /api/heritage/search fallback to Supabase / Offline Storage:', err?.message);
+      let all = [];
+      try {
+        all = await fetchHeritageFromSupabaseDirect();
+      } catch {
+        const lang = (await AsyncStorage.getItem('user_preferred_language')) || 'vi';
+        all = await getOfflineHeritages(lang);
+      }
       if (!q) return all;
       return all.filter((item) =>
         [item.name, item.address, item.province, item.description, item.category].some(
@@ -145,9 +169,15 @@ export const appService = {
         timeout: FAST_HERITAGE_TIMEOUT_MS,
       });
     } catch (err) {
-      console.warn('[appService] /api/heritage/nearby fallback to Supabase:', err?.message);
-      const all = await fetchHeritageFromSupabaseDirect();
-      return all
+      console.warn('[appService] /api/heritage/nearby fallback to Supabase / Offline Storage:', err?.message);
+      let all = [];
+      try {
+        all = await fetchHeritageFromSupabaseDirect();
+      } catch {
+        const lang = (await AsyncStorage.getItem('user_preferred_language')) || 'vi';
+        all = await getOfflineHeritages(lang);
+      }
+      return (all || [])
         .filter((item) => item.latitude != null && item.longitude != null)
         .map((item) => ({
           ...item,
@@ -234,20 +264,32 @@ export const appService = {
       return null;
     }
     try {
-      return await axiosClient.get(`/api/heritage/${id}`, {
+      const data = await axiosClient.get(`/api/heritage/${id}`, {
         timeout: FAST_HERITAGE_TIMEOUT_MS,
       });
+      if (data) return data;
     } catch (err) {
-      console.warn('[appService] /api/heritage/:id fallback to Supabase:', err?.message);
+      console.warn('[appService] /api/heritage/:id fallback to Supabase / Offline Storage:', err?.message);
+    }
+
+    try {
       const { data, error } = await supabase
         .from('heritage_info')
         .select(HERITAGE_DIRECT_SELECT)
         .eq('id', id)
         .maybeSingle();
-      if (error || !data) return null;
-      const [translated] = await applySupabaseTranslations([data]);
-      return translated || null;
+      if (!error && data) {
+        const [translated] = await applySupabaseTranslations([data]);
+        if (translated) return translated;
+      }
+    } catch (sbErr) {
+      console.warn('[appService] getHeritageById supabase error:', sbErr?.message);
     }
+
+    // Fallback Offline Storage
+    const lang = (await AsyncStorage.getItem('user_preferred_language')) || 'vi';
+    const offlineList = await getOfflineHeritages(lang);
+    return offlineList.find((item) => String(item.id) === String(id)) || null;
   },
 
   // ============================================================

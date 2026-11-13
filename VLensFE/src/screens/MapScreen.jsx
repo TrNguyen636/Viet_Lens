@@ -604,7 +604,14 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
           <View style={styles.searchRow}>
             {/* Nút Menu Bay Nhanh Toàn Quốc */}
             <TouchableOpacity
-              style={[styles.menuFab, { backgroundColor: theme.colors.card }, showQuickMenu && styles.menuFabActive]}
+              style={[
+                styles.menuFab,
+                {
+                  backgroundColor: isDark ? 'rgba(38, 34, 30, 0.78)' : 'rgba(255, 255, 255, 0.78)',
+                  borderColor: isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.65)',
+                },
+                showQuickMenu && styles.menuFabActive,
+              ]}
               onPress={() => setShowQuickMenu((prev) => !prev)}
               activeOpacity={0.8}
             >
@@ -616,7 +623,15 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
             </TouchableOpacity>
 
             {/* Thanh Tìm Kiếm Mở Rộng */}
-            <View style={[styles.searchBar, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+            <View
+              style={[
+                styles.searchBar,
+                {
+                  backgroundColor: isDark ? 'rgba(38, 34, 30, 0.85)' : 'rgba(255, 255, 255, 0.85)',
+                  borderColor: isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.65)',
+                },
+              ]}
+            >
               <Ionicons name="search-outline" size={18} color={theme.colors.inkMuted} />
               <TextInput
                 style={[styles.searchInput, { color: theme.colors.ink }]}
@@ -686,7 +701,14 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
         <View style={styles.rightActionControls}>
           {/* Nút 3D / 2D (Bước 2) */}
           <TouchableOpacity
-            style={[styles.floatingActionBtn, { backgroundColor: theme.colors.card }, is3D && styles.floatingActionBtnActive]}
+            style={[
+              styles.floatingActionBtn,
+              {
+                backgroundColor: isDark ? 'rgba(38, 34, 30, 0.78)' : 'rgba(255, 255, 255, 0.78)',
+                borderColor: isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.65)',
+              },
+              is3D && styles.floatingActionBtnActive,
+            ]}
             onPress={toggle3D}
             activeOpacity={0.8}
           >
@@ -695,7 +717,14 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
 
           {/* Nút Chuyển Kiểu Bản Đồ: NORMAL (roadmap) ↔ HYBRID (hybrid) (Bước 2) */}
           <TouchableOpacity
-            style={[styles.floatingActionBtn, { backgroundColor: theme.colors.card }, isHybrid && styles.floatingActionBtnActive]}
+            style={[
+              styles.floatingActionBtn,
+              {
+                backgroundColor: isDark ? 'rgba(38, 34, 30, 0.78)' : 'rgba(255, 255, 255, 0.78)',
+                borderColor: isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.65)',
+              },
+              isHybrid && styles.floatingActionBtnActive,
+            ]}
             onPress={toggleMapType}
             activeOpacity={0.8}
           >
@@ -706,7 +735,14 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
 
           {/* Nút Quét di tích xung quanh (Tính năng 1: 2km/5km/10km) */}
           <TouchableOpacity
-            style={[styles.floatingActionBtn, { backgroundColor: theme.colors.card }, isScanningRadius && styles.floatingActionBtnActive]}
+            style={[
+              styles.floatingActionBtn,
+              {
+                backgroundColor: isDark ? 'rgba(38, 34, 30, 0.78)' : 'rgba(255, 255, 255, 0.78)',
+                borderColor: isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.65)',
+              },
+              isScanningRadius && styles.floatingActionBtnActive,
+            ]}
             onPress={() => handleStartRadiusScan(scanRadiusKm)}
             activeOpacity={0.8}
           >
@@ -719,7 +755,13 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
 
           {/* Nút GPS Định Vị Vị Trí Của Tôi */}
           <TouchableOpacity
-            style={[styles.floatingActionBtn, { backgroundColor: theme.colors.card }]}
+            style={[
+              styles.floatingActionBtn,
+              {
+                backgroundColor: isDark ? 'rgba(38, 34, 30, 0.78)' : 'rgba(255, 255, 255, 0.78)',
+                borderColor: isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.65)',
+              },
+            ]}
             onPress={handleRecenter}
             activeOpacity={0.8}
           >
@@ -1159,7 +1201,7 @@ const styles = StyleSheet.create({
   // Thanh Tìm Kiếm Rộng Rãi Toàn Ngang
   topSearchWrapper: {
     position: 'absolute',
-    top: 50,
+    top: 14,
     left: 14,
     right: 14,
     zIndex: 30,
@@ -1173,16 +1215,14 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 14,
-    backgroundColor: '#FFF',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: THEME.colors.border,
-    elevation: 4,
+    elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 5,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   menuFabActive: {
     backgroundColor: '#C62828',
@@ -1193,16 +1233,14 @@ const styles = StyleSheet.create({
     height: 46,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF',
     paddingHorizontal: 12,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: THEME.colors.border,
-    elevation: 4,
+    elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 5,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   searchInput: {
     flex: 1,
@@ -1260,7 +1298,7 @@ const styles = StyleSheet.create({
   // Cụm Nút Điều Khiển Bản Đồ Dọc Bên Phải
   rightActionControls: {
     position: 'absolute',
-    top: 112,
+    top: 72,
     right: 14,
     gap: 10,
     zIndex: 25,
@@ -1269,19 +1307,17 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: '#FFF',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: THEME.colors.border,
-    elevation: 4,
+    elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 5,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   floatingActionBtnActive: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: 'rgba(254, 243, 199, 0.92)',
     borderColor: '#C62828',
   },
   fabText: {
@@ -1296,7 +1332,7 @@ const styles = StyleSheet.create({
   // Banner Địa Danh Vừa Nhận Diện Từ Camera
   focusedBanner: {
     position: 'absolute',
-    top: 110,
+    top: 72,
     left: 14,
     right: 70,
     flexDirection: 'row',

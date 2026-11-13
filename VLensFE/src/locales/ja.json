@@ -45,7 +45,9 @@
     "page": "ページ",
     "modePaged": "ページ毎",
     "modeContinuous": "連続表示",
-    "clearFilter": "解除"
+    "clearFilter": "解除",
+    "offlineNotice": "オフラインモード — 遺産データ利用可能",
+    "onlineRestored": "インターネット接続が復旧しました"
   },
   "detail": {
     "audioGuideTitle": "AI 音声ガイド解説",

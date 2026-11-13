@@ -45,7 +45,9 @@
     "page": "Page",
     "modePaged": "By page",
     "modeContinuous": "Continuous",
-    "clearFilter": "Clear"
+    "clearFilter": "Clear",
+    "offlineNotice": "Offline Mode — Heritage data is ready",
+    "onlineRestored": "Internet connection restored"
   },
   "detail": {
     "audioGuideTitle": "AI Audio Guide Narration",

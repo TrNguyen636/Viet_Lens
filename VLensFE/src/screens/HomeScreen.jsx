@@ -21,6 +21,8 @@ import appService from '../api/appService';
 import { adaptHeritageList, DEFAULT_HERITAGE_IMAGE } from '../utils/heritageAdapter';
 import { haversineDistanceKm } from '../utils/dijkstraRouter';
 import useUserLocation from '../hooks/useUserLocation';
+import useNetworkStatus from '../hooks/useNetworkStatus';
+import { getOfflineHeritages } from '../services/offlineStorageService';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.72;
@@ -31,11 +33,12 @@ export default function HomeScreen({ user, onSelectSite, onNavigateToCamera, onN
   const { theme, isDark } = useTheme();
   const [search, setSearch] = useState('');
   const { coords: userCoords } = useUserLocation();
+  const { isConnected } = useNetworkStatus();
 
   // Backend state
-  const [allSites, setAllSites] = useState([]);
+  const [allSites, setAllSites] = useState(() => getOfflineHeritages(i18n.language));
   const [nearbySites, setNearbySites] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [failedImageIds, setFailedImageIds] = useState(new Set());
@@ -56,7 +59,18 @@ export default function HomeScreen({ user, onSelectSite, onNavigateToCamera, onN
     userCoordsRef.current = userCoords;
   }, [userCoords]);
 
-  // 1. Tải danh sách di sản & di sản lân cận từ Backend (dự phòng Supabase)
+  // Khởi tạo ngay lập tức dữ liệu hạt giống (0ms)
+  useEffect(() => {
+    getOfflineHeritages(i18n.language).then((localData) => {
+      if (Array.isArray(localData) && localData.length > 0) {
+        masterSitesRef.current = localData;
+        setAllSites(localData);
+        setNearbySites(localData.slice(0, 6));
+      }
+    });
+  }, [i18n.language]);
+
+  // 1. Tải danh sách di sản & di sản lân cận từ Backend (dự phòng Supabase / Offline Storage)
   const loadHeritageData = useCallback(async () => {
     try {
       setFailedImageIds(new Set());
@@ -86,24 +100,30 @@ export default function HomeScreen({ user, onSelectSite, onNavigateToCamera, onN
         }
         setNearbySites(nearby);
       } else {
-        masterSitesRef.current = [];
-        setAllSites([]);
-        setNearbySites([]);
+        // Nếu không kết nối được backend, nạp từ offline storage
+        const local = await getOfflineHeritages(i18n.language);
+        masterSitesRef.current = local;
+        setAllSites(local);
+        setNearbySites(local.slice(0, 6));
       }
     } catch (err) {
       console.warn('[HomeScreen] Lỗi kết nối Backend:', err.message);
-      masterSitesRef.current = [];
-      setAllSites([]);
-      setNearbySites([]);
+      const local = await getOfflineHeritages(i18n.language);
+      masterSitesRef.current = local;
+      setAllSites(local);
+      setNearbySites(local.slice(0, 6));
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
   }, [i18n?.language]);
 
+  // Tự động kích hoạt đồng bộ khi có kết nối mạng trở lại
   useEffect(() => {
-    loadHeritageData();
-  }, [loadHeritageData]);
+    if (isConnected) {
+      loadHeritageData();
+    }
+  }, [isConnected, loadHeritageData]);
 
   // Chỉ cập nhật danh sách lân cận khi người dùng thực sự di chuyển > 0.5km (tránh tải lại toàn bộ CSDL mỗi 3s)
   useEffect(() => {
@@ -341,6 +361,16 @@ export default function HomeScreen({ user, onSelectSite, onNavigateToCamera, onN
           <MaterialCommunityIcons name="account-circle" size={40} color={theme.colors.amber} />
         </TouchableOpacity>
       </View>
+
+      {/* Thanh Thông Báo Trạng Thái Ngoại Tuyến (Offline Pill Banner) */}
+      {!isConnected && (
+        <View style={[styles.offlineBanner, { backgroundColor: isDark ? '#3E2723' : '#FEF3C7', borderColor: theme.colors.amber }]}>
+          <Ionicons name="cloud-offline" size={15} color={theme.colors.amber} />
+          <Text style={[styles.offlineBannerText, { color: theme.colors.ink }]}>
+            {t('home.offlineNotice')}
+          </Text>
+        </View>
+      )}
 
       {/* Thanh Tìm Kiếm */}
       <View style={[styles.searchContainer, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
@@ -875,6 +905,23 @@ const styles = StyleSheet.create({
     color: THEME.colors.ink,
   },
   avatarBtn: {},
+  offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 20,
+    marginTop: 2,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  offlineBannerText: {
+    fontSize: 12,
+    fontWeight: '600',
+    flex: 1,
+  },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
