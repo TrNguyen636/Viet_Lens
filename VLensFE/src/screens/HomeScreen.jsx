@@ -22,7 +22,7 @@ import { adaptHeritageList, DEFAULT_HERITAGE_IMAGE } from '../utils/heritageAdap
 import { haversineDistanceKm } from '../utils/dijkstraRouter';
 import useUserLocation from '../hooks/useUserLocation';
 import useNetworkStatus from '../hooks/useNetworkStatus';
-import { getOfflineHeritages } from '../services/offlineStorageService';
+import { getSeedHeritages, getOfflineHeritages } from '../services/offlineStorageService';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.72;
@@ -35,8 +35,15 @@ export default function HomeScreen({ user, onSelectSite, onNavigateToCamera, onN
   const { coords: userCoords } = useUserLocation();
   const { isConnected } = useNetworkStatus();
 
-  // Backend state
-  const [allSites, setAllSites] = useState(() => getOfflineHeritages(i18n.language));
+  // Backend state - Khởi tạo đồng bộ ngay từ Seed Data (trả về Array, không bị Promise)
+  const [allSites, setAllSites] = useState(() => {
+    try {
+      const seed = getSeedHeritages(i18n.language);
+      return Array.isArray(seed) ? seed : [];
+    } catch {
+      return [];
+    }
+  });
   const [nearbySites, setNearbySites] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -205,9 +212,10 @@ export default function HomeScreen({ user, onSelectSite, onNavigateToCamera, onN
 
   // Danh sách các Tỉnh / Thành phố được trích xuất tự động từ CSDL
   const provinceList = useMemo(() => {
+    const listSites = Array.isArray(allSites) ? allSites : [];
     const map = new Map();
-    allSites.forEach((site) => {
-      const p = site.province?.trim() || site.locationName?.trim();
+    listSites.forEach((site) => {
+      const p = site?.province?.trim() || site?.locationName?.trim();
       if (p) {
         map.set(p, (map.get(p) || 0) + 1);
       }
@@ -218,7 +226,7 @@ export default function HomeScreen({ user, onSelectSite, onNavigateToCamera, onN
       .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 
     return [
-      { name: 'all', label: t('home.allProvinces'), count: allSites.length },
+      { name: 'all', label: t('home.allProvinces'), count: listSites.length },
       ...list,
     ];
   }, [allSites, t]);
@@ -235,12 +243,12 @@ export default function HomeScreen({ user, onSelectSite, onNavigateToCamera, onN
 
   // Lọc theo từ khóa tìm kiếm và theo Tỉnh/Thành phố
   const filteredSites = useMemo(() => {
-    let result = allSites;
+    let result = Array.isArray(allSites) ? allSites : [];
 
     // 1. Lọc theo tỉnh thành đã chọn
     if (selectedProvince && selectedProvince !== 'all') {
       result = result.filter((site) => {
-        const p = site.province?.trim() || site.locationName?.trim() || '';
+        const p = site?.province?.trim() || site?.locationName?.trim() || '';
         return p.toLowerCase() === selectedProvince.toLowerCase();
       });
     }
@@ -250,10 +258,10 @@ export default function HomeScreen({ user, onSelectSite, onNavigateToCamera, onN
       const query = search.trim().toLowerCase();
       result = result.filter((site) => {
         return (
-          site.name?.toLowerCase().includes(query) ||
-          site.locationName?.toLowerCase().includes(query) ||
-          site.province?.toLowerCase().includes(query) ||
-          site.dynasty?.toLowerCase().includes(query)
+          site?.name?.toLowerCase().includes(query) ||
+          site?.locationName?.toLowerCase().includes(query) ||
+          site?.province?.toLowerCase().includes(query) ||
+          site?.dynasty?.toLowerCase().includes(query)
         );
       });
     }
