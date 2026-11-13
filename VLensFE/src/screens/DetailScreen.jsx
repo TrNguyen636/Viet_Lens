@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { THEME, useTheme } from '../utils/theme';
 import appService from '../api/appService';
 import { adaptHeritage, adaptHeritageList, DEFAULT_HERITAGE_IMAGE } from '../utils/heritageAdapter';
+import SwipeBackWrapper from '../components/SwipeBackWrapper';
 
 const { width } = Dimensions.get('window');
 
@@ -195,8 +196,9 @@ export default function DetailScreen({ site: initialSite, onBack, onNavigateToCh
       : fullDescription;
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.bg }]}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+    <SwipeBackWrapper onBack={handleBack}>
+      <View style={[styles.container, { backgroundColor: theme.colors.bg }]}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* ======================================================== */}
         {/* 1. HERO COVER IMAGE & FLOATING SAFE BAR                   */}
         {/* ======================================================== */}
@@ -570,7 +572,8 @@ export default function DetailScreen({ site: initialSite, onBack, onNavigateToCh
         </TouchableOpacity>
       </View>
     </View>
-  );
+  </SwipeBackWrapper>
+);
 }
 
 const styles = StyleSheet.create({

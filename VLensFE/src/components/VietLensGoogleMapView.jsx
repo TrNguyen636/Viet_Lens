@@ -9,8 +9,9 @@ function generateGoogleMapsWebGLHTML() {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
-  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <meta name="referrer" content="no-referrer" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+  <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     html, body, #map {
@@ -349,6 +350,12 @@ function generateGoogleMapsWebGLHTML() {
         emitCameraIdle();
       });
 
+      map.on('error', function(e) {
+        if (e && e.error) {
+          postToNative({ type: 'MAP_ERROR', error: String(e.error.message || e.error) });
+        }
+      });
+
       window.addEventListener('resize', function() {
         if (map) map.resize();
       });
@@ -440,7 +447,6 @@ function generateGoogleMapsWebGLHTML() {
       isNavigatingMode = false;
       requestAnimationFrame(function() {
         if (!map) return;
-        map.resize();
         map.flyTo({
           center: [Number(lng), Number(lat)],
           zoom: zoom || 15.5,
@@ -642,6 +648,17 @@ function generateGoogleMapsWebGLHTML() {
       });
     };
 
+    // Tự động tải lại tile khi mạng online trở lại
+    window.reloadTiles = function() {
+      if (!map) return;
+      try {
+        var c = map.getCenter();
+        var z = map.getZoom();
+        map.jumpTo({ center: [c.lng, c.lat], zoom: z });
+        map.triggerRepaint();
+      } catch (e) {}
+    };
+
     initMap();
   </script>
 </body>
@@ -720,12 +737,16 @@ const VietLensGoogleMapView = forwardRef(function VietLensGoogleMapView(
       const script = `if (typeof window.clearRadiusCircle === 'function') { window.clearRadiusCircle(); } true;`;
       webViewRef.current?.injectJavaScript(script);
     },
+    reloadTiles: () => {
+      const script = `if (typeof window.reloadTiles === 'function') { window.reloadTiles(); } true;`;
+      webViewRef.current?.injectJavaScript(script);
+    },
   }));
 
   const htmlSource = useMemo(() => {
     return {
       html: generateGoogleMapsWebGLHTML(),
-      baseUrl: 'https://localhost',
+      baseUrl: 'https://www.google.com',
     };
   }, []);
 
@@ -755,6 +776,8 @@ const VietLensGoogleMapView = forwardRef(function VietLensGoogleMapView(
         if (onUserPannedNav) onUserPannedNav();
       } else if (data.type === 'MAP_CLICK') {
         if (onMapClick) onMapClick(data);
+      } else if (data.type === 'MAP_ERROR') {
+        console.warn('[VietLensGoogleMapView] MapLibre tile error:', data.error);
       }
     } catch (e) {
       console.warn('[VietLensGoogleMapView] Message error:', e);
@@ -770,6 +793,9 @@ const VietLensGoogleMapView = forwardRef(function VietLensGoogleMapView(
         style={styles.webview}
         javaScriptEnabled={true}
         domStorageEnabled={true}
+        cacheEnabled={true}
+        cacheMode="LOAD_DEFAULT"
+        androidLayerType="hardware"
         mixedContentMode="always"
         onMessage={handleMessage}
         startInLoadingState={true}

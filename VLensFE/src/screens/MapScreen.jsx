@@ -18,8 +18,14 @@ import { MAP_CONFIG } from '../utils/mapConfig';
 import appService from '../api/appService';
 import { adaptHeritageList } from '../utils/heritageAdapter';
 import useUserLocation from '../hooks/useUserLocation';
+import useNetworkStatus from '../hooks/useNetworkStatus';
 import { simplifyDouglasPeucker } from '../utils/douglasPeucker';
 import { mapPerfLogger } from '../utils/mapPerfLogger';
+import {
+  getSeedHeritages,
+  getOfflineHeritages,
+  saveOfflineHeritages,
+} from '../services/offlineStorageService';
 import {
   snapToRoute,
   isOffRoute,
@@ -71,16 +77,100 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
   const [showRadiusDrawer, setShowRadiusDrawer] = useState(false);
 
   const { coords: userCoords } = useUserLocation(isNavigating);
+  const network = useNetworkStatus();
+  const isNetworkOffline = !network.isConnected || !network.isInternetReachable;
+  const prevOfflineRef = useRef(isNetworkOffline);
+
+  // Tự động tải lại bản đồ và đồng bộ di sản khi mạng kết nối trở lại
+  useEffect(() => {
+    if (prevOfflineRef.current && !isNetworkOffline) {
+      console.log('[MapScreen] Đã có mạng trở lại, tự động nạp lại bản đồ và di sản...');
+      setIsOffline(false);
+      setErrorMessage(null);
+      mapRef.current?.reloadTiles();
+
+      appService
+        .getAllHeritage()
+        .then((data) => {
+          if (Array.isArray(data) && data.length > 0) {
+            const adapted = adaptHeritageList(data).map((s) => ({
+              id: s.id,
+              name: s.name,
+              locationName: s.locationName || s.province,
+              latitude: s.latitude,
+              longitude: s.longitude,
+              category: s.category || 'Di sản văn hóa',
+              image: s.imageUrl || s.image,
+              description: s.description,
+              icon: '🏛️',
+              color: '#B91C1C',
+            }));
+            const valid = adapted.filter((s) => s.latitude && s.longitude);
+            setDbSites(valid);
+            saveOfflineHeritages(data).catch(() => {});
+          }
+        })
+        .catch(() => {});
+    }
+    prevOfflineRef.current = isNetworkOffline;
+  }, [isNetworkOffline]);
 
   // Điểm tọa độ người dùng / điểm bắt đầu (Ưu tiên GPS thực, fallback Đà Nẵng)
   const defaultUserCoords = userCoords
     ? [userCoords.longitude, userCoords.latitude]
     : [108.2274, 16.0610];
 
-  // Tải toàn bộ danh sách di sản từ Backend Supabase/Spring Boot
-  const [dbSites, setDbSites] = useState([]);
+  // Tải danh sách di sản (Đồng bộ hạt giống -> Offline cache -> Backend Supabase)
+  const [dbSites, setDbSites] = useState(() => {
+    try {
+      const seed = getSeedHeritages();
+      if (Array.isArray(seed) && seed.length > 0) {
+        return seed
+          .map((s) => ({
+            id: s.id,
+            name: s.name,
+            locationName: s.locationName || s.province,
+            latitude: s.latitude,
+            longitude: s.longitude,
+            category: s.category || 'Di sản văn hóa',
+            image: s.imageUrl || s.image,
+            description: s.description,
+            icon: '🏛️',
+            color: '#B91C1C',
+          }))
+          .filter((s) => s.latitude && s.longitude);
+      }
+    } catch (_) {}
+    return [];
+  });
+
   useEffect(() => {
     let isMounted = true;
+
+    // 1. Nạp nhanh từ AsyncStorage (nếu từng đồng bộ bản offline trước đó)
+    getOfflineHeritages()
+      .then((offlineData) => {
+        if (isMounted && Array.isArray(offlineData) && offlineData.length > 0) {
+          const adapted = offlineData
+            .map((s) => ({
+              id: s.id,
+              name: s.name,
+              locationName: s.locationName || s.province,
+              latitude: s.latitude,
+              longitude: s.longitude,
+              category: s.category || 'Di sản văn hóa',
+              image: s.imageUrl || s.image,
+              description: s.description,
+              icon: '🏛️',
+              color: '#B91C1C',
+            }))
+            .filter((s) => s.latitude && s.longitude);
+          setDbSites(adapted);
+        }
+      })
+      .catch(() => {});
+
+    // 2. Tải bản mới nhất từ backend online
     appService
       .getAllHeritage()
       .then((data) => {
@@ -97,11 +187,13 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
             icon: '🏛️',
             color: '#B91C1C',
           }));
-          setDbSites(adapted.filter((s) => s.latitude && s.longitude));
+          const valid = adapted.filter((s) => s.latitude && s.longitude);
+          setDbSites(valid);
+          saveOfflineHeritages(data).catch(() => {});
         }
       })
       .catch((err) => {
-        console.warn('[MapScreen] Lỗi tải di sản:', err.message);
+        console.warn('[MapScreen] Đang dùng dữ liệu di sản offline/seed:', err.message);
       });
     return () => {
       isMounted = false;
@@ -143,6 +235,19 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
     mapRef.current?.clearRadiusCircle();
 
     setSelectedMarkerSite(targetSite);
+
+    // Cắm ghim ngay lập tức cho địa danh được chọn để hiển thị rõ ràng
+    const siteMarker = {
+      id: targetSite.id,
+      name: targetSite.name,
+      latitude: lat,
+      longitude: lng,
+      category: targetSite.category || 'Di sản',
+      province: targetSite.province || targetSite.locationName || 'Việt Nam',
+      imageUrl: targetSite.imageUrl || targetSite.image,
+      color: '#C62828',
+    };
+    mapRef.current?.updateMarkers([siteMarker]);
     mapRef.current?.flyTo(lat, lng, 16.5, is3D ? 55 : 0, -20);
   };
 
@@ -213,7 +318,7 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
         );
 
         const dur = Date.now() - startReq;
-        if (Array.isArray(data)) {
+        if (Array.isArray(data) && data.length > 0) {
           const markers = data.map((s) => ({
             id: s.id,
             name: s.name,
@@ -230,12 +335,45 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
           mapRef.current?.updateMarkers(markers);
           setIsOffline(false);
           setErrorMessage(null);
+          return;
         }
       } catch (err) {
         if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
           console.warn('[MapScreen] Lỗi tải BBox:', err.message);
           setIsOffline(true);
           setErrorMessage('Mất kết nối backend. Đang dùng dữ liệu lưu trong phiên.');
+        }
+      }
+
+      // Offline / Fallback: Nếu BBox API lỗi hoặc rỗng, tự động lọc từ dbSites có sẵn trong tầm nhìn bounds
+      if (Array.isArray(dbSites) && dbSites.length > 0) {
+        const fallbackMarkers = dbSites
+          .filter((s) => {
+            const sLat = Number(s.latitude);
+            const sLng = Number(s.longitude);
+            return (
+              !isNaN(sLat) &&
+              !isNaN(sLng) &&
+              sLat >= bounds.minLat &&
+              sLat <= bounds.maxLat &&
+              sLng >= bounds.minLng &&
+              sLng <= bounds.maxLng
+            );
+          })
+          .map((s) => ({
+            id: s.id,
+            name: s.name,
+            latitude: Number(s.latitude),
+            longitude: Number(s.longitude),
+            category: s.category || 'Di sản',
+            province: s.locationName || s.province,
+            imageUrl: s.image,
+            color: '#C62828',
+          }));
+
+        if (fallbackMarkers.length > 0) {
+          bboxCacheRef.current[gridKey] = fallbackMarkers;
+          mapRef.current?.updateMarkers(fallbackMarkers);
         }
       }
     }, 400); // Debounce 400ms (Bước 3)
@@ -579,21 +717,24 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
         }}
       />
 
-      {/* Banner Cảnh Báo Ngoại Tuyến (Offline - Bước 5) */}
-      {!isNavigating && (isOffline || errorMessage) && (
+      {/* Banner Cảnh Báo Ngoại Tuyến (Offline) */}
+      {!isNavigating && (isNetworkOffline || isOffline || errorMessage) && (
         <View style={styles.offlineBanner}>
           <Ionicons name="cloud-offline" size={16} color="#B91C1C" />
           <Text style={styles.offlineBannerText} numberOfLines={1}>
-            {errorMessage || 'Đang ngoại tuyến — hiển thị dữ liệu lưu trong phiên'}
+            {isNetworkOffline
+              ? 'Chế độ ngoại tuyến — Hiển thị di sản & bản đồ đã lưu'
+              : errorMessage || 'Đang ngoại tuyến — hiển thị dữ liệu lưu trong phiên'}
           </Text>
           <TouchableOpacity
             style={styles.btnRetry}
             onPress={() => {
               setIsOffline(false);
               setErrorMessage(null);
+              mapRef.current?.reloadTiles();
             }}
           >
-            <Text style={styles.btnRetryText}>Thử lại</Text>
+            <Text style={styles.btnRetryText}>Tải lại</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -1158,10 +1299,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F5DC',
   },
 
-  // Banner Ngoại Tuyến (Offline - Bước 5)
+  // Banner Ngoại Tuyến (Offline)
   offlineBanner: {
     position: 'absolute',
-    top: 104,
+    top: 68,
     left: 14,
     right: 14,
     flexDirection: 'row',

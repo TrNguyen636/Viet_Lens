@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -7,6 +7,8 @@ import {
   StatusBar,
   Platform,
   Keyboard,
+  BackHandler,
+  ToastAndroid,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -52,6 +54,42 @@ function MainApp() {
   // Lắng nghe bàn phím ảo để tự động ẩn Bottom Navigation Bar khi gõ phím
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [updateInfo, setUpdateInfo] = useState(null);
+  const lastBackPressRef = useRef(0);
+
+  // Xử lý cử chỉ Back & phím cứng Back của hệ điều hành
+  useEffect(() => {
+    const onHardwareBack = () => {
+      // 1. Nếu đang mở DetailScreen, để SwipeBackWrapper xử lý trước
+      if (selectedSite) {
+        return false;
+      }
+
+      // 2. Nếu đang ở các tab con (map, chat, profile) -> quay về tab Home
+      if (appState === 'main' && activeTab !== 'home') {
+        setActiveTab('home');
+        return true;
+      }
+
+      // 3. Nếu đang ở Tab Home -> bấm 2 lần trong 2 giây để thoát app
+      if (appState === 'main' && activeTab === 'home') {
+        const now = Date.now();
+        if (now - lastBackPressRef.current < 2000) {
+          BackHandler.exitApp();
+          return true;
+        }
+        lastBackPressRef.current = now;
+        if (Platform.OS === 'android') {
+          ToastAndroid.show('Nhấn lần nữa để thoát ứng dụng', ToastAndroid.SHORT);
+        }
+        return true;
+      }
+
+      return false;
+    };
+
+    const sub = BackHandler.addEventListener('hardwareBackPress', onHardwareBack);
+    return () => sub.remove();
+  }, [selectedSite, appState, activeTab]);
 
   useEffect(() => {
     if (activeTab === 'map') {
