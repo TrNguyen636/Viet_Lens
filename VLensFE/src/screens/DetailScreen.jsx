@@ -554,8 +554,13 @@ export default function DetailScreen({ site: initialSite, onBack, onNavigateToCh
           onPress={handleNavigateToMapDirect}
           activeOpacity={0.8}
         >
-          <Ionicons name="navigate" size={18} color={theme.colors.amber} />
-          <Text style={[styles.directionsBtnText, { color: theme.colors.amber }]}>
+          <Ionicons name="navigate" size={18} color={theme.colors.amber} style={{ flexShrink: 0 }} />
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
+            style={[styles.directionsBtnText, { color: theme.colors.amber }]}
+          >
             {t('detail.directions')}
           </Text>
         </TouchableOpacity>
@@ -565,8 +570,13 @@ export default function DetailScreen({ site: initialSite, onBack, onNavigateToCh
           onPress={() => handleNavigateToChat(site)}
           activeOpacity={0.85}
         >
-          <MaterialCommunityIcons name="robot-outline" size={20} color="#FFF" />
-          <Text style={styles.askAiStickyBtnText}>
+          <MaterialCommunityIcons name="robot-outline" size={20} color="#FFF" style={{ flexShrink: 0 }} />
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
+            style={styles.askAiStickyBtnText}
+          >
             {t('detail.askAi')}
           </Text>
         </TouchableOpacity>
@@ -943,13 +953,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 13,
+    paddingHorizontal: 10,
+    minHeight: 48,
     borderRadius: 14,
     borderWidth: 1.5,
     gap: 6,
+    overflow: 'hidden',
   },
   directionsBtnText: {
     fontSize: 14,
     fontWeight: '700',
+    flexShrink: 1,
   },
   askAiStickyBtn: {
     flex: 1.3,
@@ -957,8 +971,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 13,
+    paddingHorizontal: 12,
+    minHeight: 48,
     borderRadius: 14,
     gap: 6,
+    overflow: 'hidden',
     elevation: 3,
     shadowColor: '#C62828',
     shadowOffset: { width: 0, height: 2 },
@@ -969,5 +986,6 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 14,
     fontWeight: '700',
+    flexShrink: 1,
   },
 });

@@ -12,6 +12,7 @@ import {
   Image,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { THEME, useTheme } from '../utils/theme';
 import VietLensGoogleMapView from '../components/VietLensGoogleMapView';
 import { MAP_CONFIG } from '../utils/mapConfig';
@@ -35,6 +36,7 @@ import {
 } from '../utils/dijkstraRouter';
 
 export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite = null }) {
+  const { t } = useTranslation();
   const { theme, isDark } = useTheme();
   const mapRef = useRef(null);
   const [search, setSearch] = useState('');
@@ -471,7 +473,7 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
       }
     } catch (err) {
       console.warn('[MapScreen] Lỗi tính tuyến đường nội bộ:', err.message);
-      setErrorMessage('Không thể tính toán tuyến đường');
+      setErrorMessage(t('map.routeError'));
     } finally {
       setIsCalculatingRoute(false);
     }
@@ -817,8 +819,8 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
           <Ionicons name="cloud-offline" size={16} color="#B91C1C" />
           <Text style={styles.offlineBannerText} numberOfLines={1}>
             {isNetworkOffline
-              ? 'Chế độ ngoại tuyến — Hiển thị di sản & bản đồ đã lưu'
-              : errorMessage || 'Đang ngoại tuyến — hiển thị dữ liệu lưu trong phiên'}
+              ? t('map.offlineMsg')
+              : errorMessage || t('map.offlineMsg')}
           </Text>
           <TouchableOpacity
             style={styles.btnRetry}
@@ -828,7 +830,7 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
               mapRef.current?.reloadTiles();
             }}
           >
-            <Text style={styles.btnRetryText}>Tải lại</Text>
+            <Text style={styles.btnRetryText}>{t('map.retry')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -870,7 +872,7 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
               <Ionicons name="search-outline" size={18} color={theme.colors.inkMuted} />
               <TextInput
                 style={[styles.searchInput, { color: theme.colors.ink }]}
-                placeholder="Tìm di sản, địa danh, tỉnh thành..."
+                placeholder={t('map.searchPlaceholder')}
                 placeholderTextColor={theme.colors.inkLight}
                 value={search}
                 onChangeText={(text) => {
@@ -1010,7 +1012,7 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
         <View style={styles.focusedBanner}>
           <View style={styles.focusedBadge}>
             <Ionicons name="camera" size={14} color="#FFF" />
-            <Text style={styles.focusedBadgeText}>Vừa nhận diện</Text>
+            <Text style={styles.focusedBadgeText}>{t('map.justRecognized')}</Text>
           </View>
           <Text style={styles.focusedName} numberOfLines={1}>
             {focusedSite.name}
@@ -1024,7 +1026,7 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
             }}
           >
             <Ionicons name="navigate" size={12} color="#FFF" />
-            <Text style={styles.focusedRouteText}>Chỉ đường</Text>
+            <Text style={styles.focusedRouteText}>{t('map.directions')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -1072,8 +1074,10 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
                 calculateRoute([lng, lat], selectedMarkerSite.name);
               }}
             >
-              <Ionicons name="navigate" size={14} color="#FFF" />
-              <Text style={styles.btnNavPrimaryText}>Chỉ đường Dijkstra</Text>
+              <Ionicons name="navigate" size={14} color="#FFF" style={{ flexShrink: 0 }} />
+              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.btnNavPrimaryText, { flexShrink: 1 }]}>
+                {t('map.directionsDijkstra')}
+              </Text>
             </TouchableOpacity>
 
             {onSelectSite && (
@@ -1081,8 +1085,10 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
                 style={[styles.btnDetailSecondary, { borderColor: theme.colors.red }]}
                 onPress={() => onSelectSite(selectedMarkerSite)}
               >
-                <Ionicons name="information-circle-outline" size={15} color={theme.colors.red} />
-                <Text style={[styles.btnDetailSecondaryText, { color: theme.colors.red }]}>Khám phá chi tiết</Text>
+                <Ionicons name="information-circle-outline" size={15} color={theme.colors.red} style={{ flexShrink: 0 }} />
+                <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.btnDetailSecondaryText, { color: theme.colors.red, flexShrink: 1 }]}>
+                  {t('map.exploreDetails')}
+                </Text>
               </TouchableOpacity>
             )}
           </View>
@@ -1095,7 +1101,7 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
           <View style={styles.drawerHeader}>
             <View style={styles.drawerTitleRow}>
               <Ionicons name="navigate-circle-outline" size={18} color="#C62828" />
-              <Text style={[styles.drawerTitle, { color: theme.colors.ink }]}>Điểm Bay Nhanh Toàn Quốc</Text>
+              <Text style={[styles.drawerTitle, { color: theme.colors.ink }]}>{t('map.quickFlyTitle')}</Text>
             </View>
             <TouchableOpacity onPress={() => setShowQuickMenu(false)}>
               <Ionicons name="close" size={18} color={theme.colors.inkMuted} />
@@ -1104,20 +1110,26 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
 
           {/* Tab Chọn Vùng Miền */}
           <View style={styles.regionTabs}>
-            {['Tất cả', 'Miền Bắc', 'Miền Trung', 'Miền Nam'].map((reg) => (
+            {[
+              { id: 'Tất cả', label: t('map.regionAll') },
+              { id: 'Miền Bắc', label: t('map.regionNorth') },
+              { id: 'Miền Trung', label: t('map.regionCentral') },
+              { id: 'Miền Nam', label: t('map.regionSouth') },
+            ].map((reg) => (
               <TouchableOpacity
-                key={reg}
-                style={[styles.regionChip, { backgroundColor: theme.colors.parchment }, selectedRegion === reg && styles.regionChipActive]}
-                onPress={() => setSelectedRegion(reg)}
+                key={reg.id}
+                style={[styles.regionChip, { backgroundColor: theme.colors.parchment }, selectedRegion === reg.id && styles.regionChipActive]}
+                onPress={() => setSelectedRegion(reg.id)}
               >
                 <Text
+                  numberOfLines={1}
                   style={[
                     styles.regionChipText,
                     { color: theme.colors.ink },
-                    selectedRegion === reg && styles.regionChipTextActive,
+                    selectedRegion === reg.id && styles.regionChipTextActive,
                   ]}
                 >
-                  {reg}
+                  {reg.label}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -1160,7 +1172,7 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
             <View style={styles.routeTitleWrap}>
               <View style={styles.badgeRouteRow}>
                 <Ionicons name="navigate" size={12} color="#C62828" />
-                <Text style={styles.badgeRoute}>LỘ TRÌNH ĐỊNH TUYẾN (DIJKSTRA ALGORITHM)</Text>
+                <Text style={styles.badgeRoute}>{t('map.routeBadge')}</Text>
               </View>
               <Text style={[styles.routeDestTitle, { color: theme.colors.ink }]} numberOfLines={1}>
                 {routeInfo.destName}
@@ -1174,9 +1186,9 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
           {/* Chế độ phương tiện */}
           <View style={styles.routeModes}>
             {[
-              { id: 'driving', label: 'Xe máy', icon: 'motorbike' },
-              { id: 'walking', label: 'Đi bộ', icon: 'walk' },
-              { id: 'cycling', label: 'Xe đạp', icon: 'bicycle' },
+              { id: 'driving', label: t('map.modeDriving'), icon: 'motorbike' },
+              { id: 'walking', label: t('map.modeWalking'), icon: 'walk' },
+              { id: 'cycling', label: t('map.modeCycling'), icon: 'bicycle' },
             ].map((m) => {
               const activeColor = getRouteColor(m.id);
               const isActive = routeMode === m.id;
@@ -1194,8 +1206,14 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
                     name={m.icon}
                     size={16}
                     color={isActive ? '#FFF' : theme.colors.ink}
+                    style={{ flexShrink: 0 }}
                   />
-                  <Text style={[styles.modeTabText, { color: theme.colors.ink }, isActive && styles.modeTabTextActive]}>
+                  <Text
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.8}
+                    style={[styles.modeTabText, { color: theme.colors.ink, flexShrink: 1 }, isActive && styles.modeTabTextActive]}
+                  >
                     {m.label}
                   </Text>
                 </TouchableOpacity>
@@ -1206,13 +1224,13 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
           {/* Thống kê km và phút */}
           <View style={[styles.routeStats, { backgroundColor: theme.colors.parchment, borderColor: theme.colors.border }]}>
             <View style={styles.statBox}>
-              <Text style={[styles.statLabel, { color: theme.colors.inkMuted }]}>Khoảng cách</Text>
+              <Text style={[styles.statLabel, { color: theme.colors.inkMuted }]}>{t('map.distance')}</Text>
               <Text style={[styles.statVal, { color: theme.colors.ink }]}>{routeInfo.distanceKm} km</Text>
             </View>
             <View style={[styles.statDivider, { backgroundColor: theme.colors.border }]} />
             <View style={styles.statBox}>
-              <Text style={[styles.statLabel, { color: theme.colors.inkMuted }]}>Thời gian dự kiến</Text>
-              <Text style={[styles.statVal, { color: theme.colors.ink }]}>{routeInfo.durationMin} phút</Text>
+              <Text style={[styles.statLabel, { color: theme.colors.inkMuted }]}>{t('map.estimatedTime')}</Text>
+              <Text style={[styles.statVal, { color: theme.colors.ink }]}>{routeInfo.durationMin} {t('map.minuteUnit')}</Text>
             </View>
           </View>
 
@@ -1226,9 +1244,12 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
               name={routeMode === 'walking' ? 'walk' : routeMode === 'cycling' ? 'bicycle' : 'motorbike'}
               size={19}
               color="#FFF"
+              style={{ flexShrink: 0 }}
             />
-            <Text style={styles.btnStartNavigationText}>
-              Bắt đầu đi ({routeMode === 'walking' ? 'Đi bộ' : routeMode === 'cycling' ? 'Xe đạp' : 'Xe máy'})
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} style={[styles.btnStartNavigationText, { flexShrink: 1 }]}>
+              {t('map.startNav', {
+                mode: routeMode === 'walking' ? t('map.modeWalking') : routeMode === 'cycling' ? t('map.modeCycling') : t('map.modeDriving'),
+              })}
             </Text>
           </TouchableOpacity>
         </View>
@@ -1251,16 +1272,16 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
                 {navTurnInfo?.distMeters != null ? `${navTurnInfo.distMeters} m` : '--'}
               </Text>
               <Text style={styles.navActionText} numberOfLines={2}>
-                {navTurnInfo?.text || 'Tiếp tục đi thẳng theo lộ trình'}
+                {navTurnInfo?.text || t('map.continueStraight')}
               </Text>
               {isRerouting ? (
                 <View style={styles.reroutingBadge}>
                   <ActivityIndicator size="small" color="#FDE047" style={{ marginRight: 4 }} />
-                  <Text style={styles.reroutingText}>Đang tính lại bằng Dijkstra...</Text>
+                  <Text style={styles.reroutingText}>{t('map.rerouting')}</Text>
                 </View>
               ) : (
                 <Text style={styles.navAlgoBadge}>
-                  Dijkstra Router đang giám sát lộ trình
+                  {t('map.navMonitoring')}
                 </Text>
               )}
             </View>
@@ -1281,7 +1302,7 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
               activeOpacity={0.8}
             >
               <Ionicons name="locate" size={18} color="#FFF" />
-              <Text style={styles.navRecenterText}>Về vị trí</Text>
+              <Text style={styles.navRecenterText}>{t('map.recenter')}</Text>
             </TouchableOpacity>
           )}
 
@@ -1290,21 +1311,21 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
             <View style={styles.navStatsRow}>
               <View style={styles.navStatCol}>
                 <Text style={styles.navStatVal}>{navRemaining.distanceKm}</Text>
-                <Text style={styles.navStatUnit}>km còn lại</Text>
+                <Text style={styles.navStatUnit}>{t('map.kmRemaining')}</Text>
               </View>
               <View style={styles.navStatDivider} />
               <View style={styles.navStatCol}>
                 <Text style={styles.navStatVal}>{navRemaining.durationMin}</Text>
-                <Text style={styles.navStatUnit}>phút</Text>
+                <Text style={styles.navStatUnit}>{t('map.minuteUnit')}</Text>
               </View>
               <View style={styles.navStatDivider} />
               <View style={[styles.navStatCol, { flex: 1.4, alignItems: 'flex-start' }]}>
                 <Text style={styles.navDestName} numberOfLines={1}>
-                  {routeInfo?.destName || 'Điểm đến'}
+                  {routeInfo?.destName || ''}
                 </Text>
-                <Text style={styles.navModeLabel}>
-                  {routeMode === 'driving' ? '🏍️ Xe máy' : routeMode === 'walking' ? '🚶 Đi bộ' : '🚲 Xe đạp'}
-                  {isSimulating ? ' • Mô phỏng' : ' • GPS thực'}
+                <Text style={styles.navModeLabel} numberOfLines={1}>
+                  {routeMode === 'driving' ? `🏍️ ${t('map.modeDriving')}` : routeMode === 'walking' ? `🚶 ${t('map.modeWalking')}` : `🚲 ${t('map.modeCycling')}`}
+                  {isSimulating ? ` • ${t('map.simulatingTag')}` : ` • ${t('map.liveGpsTag')}`}
                 </Text>
               </View>
             </View>
@@ -1313,22 +1334,26 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
               <TouchableOpacity
                 style={[
                   styles.btnStopNav,
-                  { flex: 1, backgroundColor: isSimulating ? '#0284C7' : '#44403C' },
+                  { flex: 1, paddingHorizontal: 8, backgroundColor: isSimulating ? '#0284C7' : '#44403C' },
                 ]}
                 onPress={() => setIsSimulating((prev) => !prev)}
                 activeOpacity={0.8}
               >
-                <Ionicons name={isSimulating ? 'pause-circle' : 'play-circle'} size={18} color="#FFF" />
-                <Text style={styles.btnStopNavText}>{isSimulating ? 'Dùng GPS thực' : 'Mô phỏng'}</Text>
+                <Ionicons name={isSimulating ? 'pause-circle' : 'play-circle'} size={18} color="#FFF" style={{ flexShrink: 0 }} />
+                <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.btnStopNavText, { flexShrink: 1 }]}>
+                  {isSimulating ? t('map.useLiveGps') : t('map.simulate')}
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.btnStopNav, { flex: 1 }]}
+                style={[styles.btnStopNav, { flex: 1, paddingHorizontal: 8 }]}
                 onPress={handleStopNavigation}
                 activeOpacity={0.8}
               >
-                <Ionicons name="stop-circle" size={18} color="#FFF" />
-                <Text style={styles.btnStopNavText}>Dừng dẫn đường</Text>
+                <Ionicons name="stop-circle" size={18} color="#FFF" style={{ flexShrink: 0 }} />
+                <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.btnStopNavText, { flexShrink: 1 }]}>
+                  {t('map.stopNav')}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1342,7 +1367,7 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
             <View style={styles.drawerTitleRow}>
               <MaterialCommunityIcons name="radar" size={18} color="#C62828" />
               <Text style={[styles.drawerTitle, { color: theme.colors.ink }]}>
-                Di tích quanh bạn ({nearbyPois.length} điểm)
+                {t('map.nearbyTitle', { count: nearbyPois.length })}
               </Text>
             </View>
             <TouchableOpacity onPress={handleCloseRadiusDrawer}>
@@ -1404,7 +1429,7 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
                     }}
                   >
                     <Ionicons name="navigate" size={12} color="#FFF" />
-                    <Text style={styles.btnNavMiniText}>Chỉ đường</Text>
+                    <Text style={styles.btnNavMiniText}>{t('map.directions')}</Text>
                   </TouchableOpacity>
                 </View>
               ))
