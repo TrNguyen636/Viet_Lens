@@ -62,3 +62,6 @@ CrawlingData/
 VLensFE/android/.kotlin/errors/
 **/credentials.txt
 **/*.jks
+
+# Personal ASM & research report documents (keep locally, do not push to GitHub)
+ASM_CONTENT/

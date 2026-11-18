@@ -100,6 +100,45 @@ function generateGoogleMapsWebGLHTML() {
       box-shadow: 0 0 10px rgba(26, 115, 232, 0.8);
       z-index: 2;
     }
+
+    /* Huy hiệu Phương tiện Dẫn đường (Xe máy / Xe đạp / Đi bộ) */
+    .user-vehicle-badge {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2.5px solid #FFFFFF;
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+      z-index: 3;
+      transition: background-color 0.25s ease, transform 0.25s ease;
+    }
+    .user-vehicle-badge.mode-driving {
+      background-color: #C62828;
+    }
+    .user-vehicle-badge.mode-cycling {
+      background-color: #0284C7;
+    }
+    .user-vehicle-badge.mode-walking {
+      background-color: #2E7D32;
+    }
+    .user-gps-container.nav-active .user-gps-pulse {
+      background: rgba(198, 40, 40, 0.26);
+      width: 52px;
+      height: 52px;
+    }
+    .user-gps-container.nav-active.mode-cycling .user-gps-pulse {
+      background: rgba(2, 132, 199, 0.26);
+    }
+    .user-gps-container.nav-active.mode-walking .user-gps-pulse {
+      background: rgba(46, 125, 50, 0.26);
+    }
+    .user-gps-container.nav-active .user-gps-heading {
+      border-bottom-color: #FACC15;
+      top: -4px;
+      transform-origin: center 28px;
+    }
   </style>
 </head>
 <body>
@@ -114,6 +153,9 @@ function generateGoogleMapsWebGLHTML() {
     var userMarker = null;
     var userHeadingEl = null;
     var isNavigatingMode = false;
+    var currentNavMode = 'driving';
+    var lastMarkerIsNav = false;
+    var lastMarkerMode = null;
     var currentNavBearing = 0;
 
     function postToNative(data) {
@@ -495,8 +537,8 @@ function generateGoogleMapsWebGLHTML() {
       });
     };
 
-    // Vẽ tuyến đường Polyline (từ dữ liệu đã nén Douglas-Peucker) + animateCamera tới bounds
-    window.drawRoute = function(points, color) {
+    // Vẽ tuyến đường Polyline (từ dữ liệu đã nén Douglas-Peucker) + style theo phương tiện
+    window.drawRoute = function(points, color, mode) {
       if (!map || !map.getSource('route-source')) return;
       if (!Array.isArray(points) || points.length === 0) {
         window.clearRoute();
@@ -515,8 +557,17 @@ function generateGoogleMapsWebGLHTML() {
         }
       });
 
-      if (color && map.getLayer('route-line')) {
-        map.setPaintProperty('route-line', 'line-color', color);
+      if (map.getLayer('route-line')) {
+        if (color) {
+          map.setPaintProperty('route-line', 'line-color', color);
+        }
+        if (mode === 'walking') {
+          map.setPaintProperty('route-line', 'line-dasharray', [0.5, 1.8]);
+        } else if (mode === 'cycling') {
+          map.setPaintProperty('route-line', 'line-dasharray', [2, 1.5]);
+        } else {
+          map.setPaintProperty('route-line', 'line-dasharray', null);
+        }
       }
 
       map.getSource('route-source').setData({
@@ -577,21 +628,48 @@ function generateGoogleMapsWebGLHTML() {
       });
     };
 
-    // Cập nhật vị trí Chấm xanh GPS người dùng (Tính năng 1)
-    window.updateUserLocation = function(lat, lng, heading, isNavigating) {
+    function getVehicleSvg(mode) {
+      if (mode === 'walking') {
+        return '<svg viewBox="0 0 24 24" width="19" height="19" fill="#FFFFFF"><path d="M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zM9.8 8.9L7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3C14.8 12 16.8 13 19 13v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1L6 8.3V13h2V9.6l1.8-.7z"/></svg>';
+      }
+      if (mode === 'cycling') {
+        return '<svg viewBox="0 0 24 24" width="20" height="20" fill="#FFFFFF"><path d="M15.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zM5 12c-2.8 0-5 2.2-5 5s2.2 5 5 5 5-2.2 5-5-2.2-5-5-5zm0 8.5c-1.9 0-3.5-1.6-3.5-3.5s1.6-3.5 3.5-3.5 3.5 1.6 3.5 3.5-1.6 3.5-3.5 3.5zm5.8-10l2.4-2.4.8.8c1.3 1.3 3 2.1 5.1 2.1V9c-1.5 0-2.7-.6-3.6-1.5l-1.9-1.9c-.5-.4-1-.6-1.6-.6s-1.1.2-1.4.6L7.8 8.4c-.4.4-.6.9-.6 1.4 0 .6.2 1.1.6 1.4L11 14v5h2v-6.2l-2.2-2.3zM19 12c-2.8 0-5 2.2-5 5s2.2 5 5 5 5-2.2 5-5-2.2-5-5-5zm0 8.5c-1.9 0-3.5-1.6-3.5-3.5s1.6-3.5 3.5-3.5 3.5 1.6 3.5 3.5-1.6 3.5-3.5 3.5z"/></svg>';
+      }
+      // driving -> Xe máy (Motorbike)
+      return '<svg viewBox="0 0 24 24" width="20" height="20" fill="#FFFFFF"><path d="M19.44 9.03L15.41 5H11v2h3.59l2 2H5c-2.8 0-5 2.2-5 5s2.2 5 5 5c2.46 0 4.45-1.69 4.9-4h1.65l2.77-2.77c-.21.54-.32 1.14-.32 1.77 0 2.8 2.2 5 5 5s5-2.2 5-5c0-2.65-1.97-4.77-4.56-4.97zM7.82 15C7.4 16.15 6.28 17 5 17c-1.65 0-3-1.35-3-3s1.35-3 3-3c1.28 0 2.4.85 2.82 2H5v2h2.82zM19 17c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z"/></svg>';
+    }
+
+    function applyUserMarkerVisual(el, isNav, mode) {
+      var safeMode = mode || 'driving';
+      if (isNav) {
+        el.className = 'user-gps-container nav-active mode-' + safeMode;
+        el.innerHTML = '<div class="user-gps-pulse"></div><div class="user-gps-heading"></div><div class="user-vehicle-badge mode-' + safeMode + '">' + getVehicleSvg(safeMode) + '</div>';
+      } else {
+        el.className = 'user-gps-container';
+        el.innerHTML = '<div class="user-gps-pulse"></div><div class="user-gps-heading"></div><div class="user-gps-dot"></div>';
+      }
+      userHeadingEl = el.querySelector('.user-gps-heading');
+      lastMarkerIsNav = !!isNav;
+      lastMarkerMode = safeMode;
+    }
+
+    // Cập nhật vị trí Chấm xanh GPS hoặc Icon phương tiện người dùng (Tính năng 1 & 8)
+    window.updateUserLocation = function(lat, lng, heading, isNavigating, mode) {
       if (!map || lat == null || lng == null) return;
       isNavigatingMode = !!isNavigating;
+      if (mode) currentNavMode = mode;
 
       if (!userMarker) {
         var el = document.createElement('div');
-        el.className = 'user-gps-container';
-        el.innerHTML = '<div class="user-gps-pulse"></div><div class="user-gps-heading"></div><div class="user-gps-dot"></div>';
-        userHeadingEl = el.querySelector('.user-gps-heading');
+        applyUserMarkerVisual(el, isNavigatingMode, currentNavMode);
 
         userMarker = new maplibregl.Marker({ element: el, anchor: 'center' })
           .setLngLat([lng, lat])
           .addTo(map);
       } else {
+        if (lastMarkerIsNav !== isNavigatingMode || lastMarkerMode !== currentNavMode) {
+          applyUserMarkerVisual(userMarker.getElement(), isNavigatingMode, currentNavMode);
+        }
         userMarker.setLngLat([lng, lat]);
       }
 
@@ -603,17 +681,21 @@ function generateGoogleMapsWebGLHTML() {
       if (isNavigatingMode) {
         map.easeTo({
           center: [lng, lat],
-          duration: 700,
+          duration: 600,
           essential: true
         });
       }
     };
 
     // Bắt đầu chế độ Dẫn đường thực tế 3D (Navigation Mode - Tính năng 8)
-    window.startNavigation = function(lat, lng, bearing) {
+    window.startNavigation = function(lat, lng, bearing, mode) {
       isNavigatingMode = true;
       currentNavBearing = bearing || 0;
+      if (mode) currentNavMode = mode;
       if (!map) return;
+
+      window.updateUserLocation(lat, lng, currentNavBearing, true, currentNavMode);
+
       map.flyTo({
         center: [lng, lat],
         zoom: 17.5,
@@ -639,6 +721,9 @@ function generateGoogleMapsWebGLHTML() {
     window.stopNavigation = function(lastLat, lastLng) {
       isNavigatingMode = false;
       if (!map) return;
+      if (userMarker) {
+        applyUserMarkerVisual(userMarker.getElement(), false, currentNavMode);
+      }
       map.easeTo({
         center: [lastLng, lastLat],
         zoom: 15.5,
@@ -692,12 +777,12 @@ const VietLensGoogleMapView = forwardRef(function VietLensGoogleMapView(
       const script = `if (typeof window.flyTo === 'function') { window.flyTo(${lat}, ${lng}, ${zoom}, ${tilt !== undefined ? tilt : 0}, ${heading !== undefined ? heading : 0}); } true;`;
       webViewRef.current?.injectJavaScript(script);
     },
-    updateUserLocation: (lat, lng, heading, isNavigating) => {
-      const script = `if (typeof window.updateUserLocation === 'function') { window.updateUserLocation(${lat}, ${lng}, ${heading !== undefined ? heading : 0}, ${isNavigating ? 'true' : 'false'}); } true;`;
+    updateUserLocation: (lat, lng, heading, isNavigating, mode = 'driving') => {
+      const script = `if (typeof window.updateUserLocation === 'function') { window.updateUserLocation(${lat}, ${lng}, ${heading !== undefined ? heading : 0}, ${isNavigating ? 'true' : 'false'}, '${mode}'); } true;`;
       webViewRef.current?.injectJavaScript(script);
     },
-    startNavigation: (lat, lng, bearing) => {
-      const script = `if (typeof window.startNavigation === 'function') { window.startNavigation(${lat}, ${lng}, ${bearing !== undefined ? bearing : 0}); } true;`;
+    startNavigation: (lat, lng, bearing, mode = 'driving') => {
+      const script = `if (typeof window.startNavigation === 'function') { window.startNavigation(${lat}, ${lng}, ${bearing !== undefined ? bearing : 0}, '${mode}'); } true;`;
       webViewRef.current?.injectJavaScript(script);
     },
     updateNavBearing: (bearing) => {
@@ -721,8 +806,8 @@ const VietLensGoogleMapView = forwardRef(function VietLensGoogleMapView(
       const script = `if (typeof window.updateMarkers === 'function') { window.updateMarkers(${JSON.stringify(sites || [])}); } true;`;
       webViewRef.current?.injectJavaScript(script);
     },
-    drawRoute: (points, color = '#C62828') => {
-      const script = `if (typeof window.drawRoute === 'function') { window.drawRoute(${JSON.stringify(points || [])}, '${color}'); } true;`;
+    drawRoute: (points, color = '#C62828', mode = 'driving') => {
+      const script = `if (typeof window.drawRoute === 'function') { window.drawRoute(${JSON.stringify(points || [])}, '${color}', '${mode}'); } true;`;
       webViewRef.current?.injectJavaScript(script);
     },
     clearRoute: () => {

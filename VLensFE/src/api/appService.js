@@ -239,8 +239,10 @@ export const appService = {
       const json = await res.json();
       if (json.routes && json.routes.length > 0) {
         const route = json.routes[0];
-        const distanceKm = Number((route.distance / 1000).toFixed(1));
-        const durationMin = Math.max(1, Math.round(route.duration / 60));
+        const exactDistKm = route.distance / 1000;
+        const distanceKm = Number(exactDistKm.toFixed(1));
+        const speedKmh = mode === 'walking' ? 4.5 : mode === 'cycling' ? 15.0 : 35.0;
+        const durationMin = Math.max(1, Math.round((exactDistKm / speedKmh) * 60));
         const points = (route.geometry?.coordinates || []).map(([lng, lat]) => ({
           latitude: lat,
           longitude: lng,

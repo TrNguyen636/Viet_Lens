@@ -61,8 +61,9 @@ public class RouteController {
                 List<?> routes = (List<?>) osrmResponse.get("routes");
                 if (!routes.isEmpty()) {
                     Map<?, ?> firstRoute = (Map<?, ?>) routes.get(0);
-                    double distKm = Math.round(((Number) firstRoute.get("distance")).doubleValue() / 100.0) / 10.0;
-                    int durMin = (int) Math.round(((Number) firstRoute.get("duration")).doubleValue() / 60.0);
+                    double exactDistKm = ((Number) firstRoute.get("distance")).doubleValue() / 1000.0;
+                    double distKm = Math.round(exactDistKm * 10.0) / 10.0;
+                    int durMin = estimateDurationMin(exactDistKm, mode);
 
                     Map<?, ?> geometry = (Map<?, ?>) firstRoute.get("geometry");
                     List<?> coordinates = (List<?>) geometry.get("coordinates");
@@ -90,11 +91,9 @@ public class RouteController {
                 Math.cos(Math.toRadians(request.originLat())) * Math.cos(Math.toRadians(request.destLat())) *
                 Math.sin(dLng / 2) * Math.sin(dLng / 2);
         double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        double distKm = Math.round((6371.0 * c) * 10.0) / 10.0;
-
-        // Dự kiến 35 km/h lái xe, 4.5 km/h đi bộ
-        double speed = "walking".equalsIgnoreCase(mode) ? 4.5 : ("cycling".equalsIgnoreCase(mode) ? 15.0 : 35.0);
-        int durMin = Math.max(1, (int) Math.round((distKm / speed) * 60.0));
+        double exactDistKm = 6371.0 * c;
+        double distKm = Math.round(exactDistKm * 10.0) / 10.0;
+        int durMin = estimateDurationMin(exactDistKm, mode);
 
         // Tạo 10 điểm trung gian thẳng mượt
         List<RoutePoint> points = new ArrayList<>();
@@ -107,5 +106,17 @@ public class RouteController {
         }
 
         return ResponseEntity.ok(new RouteResponse(distKm, durMin, points, null, "INTERNAL_FALLBACK_ENGINE"));
+    }
+
+    /**
+     * Ước lượng thời gian di chuyển (phút) theo từng loại phương tiện:
+     * - driving (Xe máy / Ô tô): ~35 km/h
+     * - cycling (Xe đạp): ~15 km/h
+     * - walking (Đi bộ): ~4.5 km/h
+     */
+    private int estimateDurationMin(double distanceKm, String mode) {
+        double speedKmh = "walking".equalsIgnoreCase(mode) ? 4.5
+                : ("cycling".equalsIgnoreCase(mode) ? 15.0 : 35.0);
+        return Math.max(1, (int) Math.round((distanceKm / speedKmh) * 60.0));
     }
 }

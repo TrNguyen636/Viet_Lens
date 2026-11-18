@@ -17,7 +17,7 @@ import VietLensGoogleMapView from '../components/VietLensGoogleMapView';
 import { MAP_CONFIG } from '../utils/mapConfig';
 import appService from '../api/appService';
 import { adaptHeritageList } from '../utils/heritageAdapter';
-import useUserLocation from '../hooks/useUserLocation';
+import useUserLocation, { DEFAULT_COORDS } from '../hooks/useUserLocation';
 import useNetworkStatus from '../hooks/useNetworkStatus';
 import { simplifyDouglasPeucker } from '../utils/douglasPeucker';
 import { mapPerfLogger } from '../utils/mapPerfLogger';
@@ -63,6 +63,9 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
   const [navTurnInfo, setNavTurnInfo] = useState(null);
   const [navRemaining, setNavRemaining] = useState({ distanceKm: 0, durationMin: 0 });
   const [isRerouting, setIsRerouting] = useState(false);
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [simCoords, setSimCoords] = useState(null);
+  const simSegmentRef = useRef({ index: 0, progress: 0 });
   const lastRerouteTimeRef = useRef(0);
 
   // Ghi nhận mốc thời gian mở MapScreen (Bước 6)
@@ -115,10 +118,16 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
     prevOfflineRef.current = isNetworkOffline;
   }, [isNetworkOffline]);
 
-  // Điểm tọa độ người dùng / điểm bắt đầu (Ưu tiên GPS thực, fallback Đà Nẵng)
+  // Điểm tọa độ người dùng / điểm bắt đầu (Ưu tiên GPS thực, fallback DEFAULT_COORDS)
   const defaultUserCoords = userCoords
     ? [userCoords.longitude, userCoords.latitude]
-    : [108.2274, 16.0610];
+    : [DEFAULT_COORDS.longitude, DEFAULT_COORDS.latitude];
+
+  const getRouteColor = (mode) => {
+    if (mode === 'walking') return '#2E7D32';
+    if (mode === 'cycling') return '#0284C7';
+    return '#C62828';
+  };
 
   // Tải danh sách di sản (Đồng bộ hạt giống -> Offline cache -> Backend Supabase)
   const [dbSites, setDbSites] = useState(() => {
@@ -456,8 +465,8 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
           points: simplified,
         });
 
-        // Vẽ tuyến đường đa tuyến Polyline lên Google Maps
-        mapRef.current?.drawRoute(simplified, '#C62828');
+        // Vẽ tuyến đường đa tuyến Polyline lên Google Maps theo màu & kiểu phương tiện
+        mapRef.current?.drawRoute(simplified, getRouteColor(mode), mode);
         setShowRadiusDrawer(false);
       }
     } catch (err) {
@@ -468,26 +477,103 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
     }
   };
 
-  // Đồng bộ vị trí thực của người dùng (Chấm xanh GPS Live Blue Dot - Tính năng 1)
+  const effectiveNavCoords = isNavigating && isSimulating && simCoords ? simCoords : userCoords;
+
+  // Đồng bộ vị trí thực của người dùng hoặc vị trí mô phỏng phương tiện lên bản đồ
   useEffect(() => {
-    if (userCoords?.latitude && userCoords?.longitude && mapRef.current) {
+    const activeCoords = isNavigating && isSimulating && simCoords ? simCoords : userCoords;
+    if (activeCoords?.latitude && activeCoords?.longitude && mapRef.current) {
       mapRef.current.updateUserLocation(
-        userCoords.latitude,
-        userCoords.longitude,
-        userCoords.heading || 0,
-        isNavigating
+        activeCoords.latitude,
+        activeCoords.longitude,
+        activeCoords.heading || 0,
+        isNavigating,
+        routeMode
       );
     }
-  }, [userCoords, isNavigating]);
+  }, [userCoords, simCoords, isNavigating, isSimulating, routeMode]);
 
-  // Vòng lặp giám sát dẫn đường thời gian thực với giải thuật Dijkstra (Tính năng 8)
+  // Vòng lặp mô phỏng di chuyển mượt mà theo tuyến đường đã chọn (tốc độ tỷ lệ theo phương tiện)
   useEffect(() => {
-    if (!isNavigating || !routeInfo?.points || routeInfo.points.length < 2 || !userCoords) {
+    if (!isNavigating || !isSimulating || !routeInfo?.points || routeInfo.points.length < 2) {
       return;
     }
 
-    const userLat = userCoords.latitude;
-    const userLng = userCoords.longitude;
+    const points = routeInfo.points;
+    // Tốc độ mô phỏng (km/h) được nhân hệ số để người dùng thấy phương tiện di chuyển rõ trên bản đồ
+    const simSpeedKmh = routeMode === 'walking' ? 18 : routeMode === 'cycling' ? 40 : 75;
+    const tickMs = 500;
+    const stepKm = (simSpeedKmh * tickMs) / 3600000;
+
+    const timer = setInterval(() => {
+      let { index, progress } = simSegmentRef.current;
+      if (index >= points.length - 1) {
+        clearInterval(timer);
+        return;
+      }
+
+      let remainingStepKm = stepKm;
+      while (remainingStepKm > 0 && index < points.length - 1) {
+        const a = points[index];
+        const b = points[index + 1];
+        const aLat = Number(a.lat ?? a.latitude);
+        const aLng = Number(a.lng ?? a.longitude);
+        const bLat = Number(b.lat ?? b.latitude);
+        const bLng = Number(b.lng ?? b.longitude);
+        const segLenKm = Math.max(0.001, haversineDistanceKm(aLat, aLng, bLat, bLng));
+        const remOnSegKm = segLenKm * (1 - progress);
+
+        if (remainingStepKm < remOnSegKm) {
+          progress += remainingStepKm / segLenKm;
+          remainingStepKm = 0;
+        } else {
+          remainingStepKm -= remOnSegKm;
+          index += 1;
+          progress = 0;
+        }
+      }
+
+      simSegmentRef.current = { index, progress };
+
+      if (index >= points.length - 1) {
+        const endPt = points[points.length - 1];
+        setSimCoords({
+          latitude: Number(endPt.lat ?? endPt.latitude),
+          longitude: Number(endPt.lng ?? endPt.longitude),
+          heading: 0,
+        });
+        return;
+      }
+
+      const p1 = points[index];
+      const p2 = points[index + 1];
+      const lat1 = Number(p1.lat ?? p1.latitude);
+      const lng1 = Number(p1.lng ?? p1.longitude);
+      const lat2 = Number(p2.lat ?? p2.latitude);
+      const lng2 = Number(p2.lng ?? p2.longitude);
+
+      const curLat = lat1 + (lat2 - lat1) * progress;
+      const curLng = lng1 + (lng2 - lng1) * progress;
+      const heading = calculateBearing(lat1, lng1, lat2, lng2);
+
+      setSimCoords({
+        latitude: curLat,
+        longitude: curLng,
+        heading,
+      });
+    }, tickMs);
+
+    return () => clearInterval(timer);
+  }, [isNavigating, isSimulating, routeInfo, routeMode]);
+
+  // Vòng lặp giám sát dẫn đường thời gian thực với giải thuật Dijkstra (Tính năng 8)
+  useEffect(() => {
+    if (!isNavigating || !routeInfo?.points || routeInfo.points.length < 2 || !effectiveNavCoords) {
+      return;
+    }
+
+    const userLat = effectiveNavCoords.latitude;
+    const userLng = effectiveNavCoords.longitude;
     const points = routeInfo.points;
 
     // 1. Kiểm tra đã đến đích chưa (< 35 mét)
@@ -534,7 +620,7 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
               durationMin: res.durationMin,
               points: simplified,
             }));
-            mapRef.current?.drawRoute(simplified, '#C62828');
+            mapRef.current?.drawRoute(simplified, getRouteColor(routeMode), routeMode);
           }
         })
         .catch((err) => {
@@ -557,7 +643,7 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
     const distToNextMeters = haversineDistanceKm(userLat, userLng, nextLat, nextLng) * 1000;
     const bearingToNext = calculateBearing(userLat, userLng, nextLat, nextLng);
 
-    const turn = getTurnInstruction(userCoords.heading || bearingToNext, nextPt, afterNextPt);
+    const turn = getTurnInstruction(effectiveNavCoords.heading || bearingToNext, nextPt, afterNextPt);
 
     setNavTurnInfo({
       icon: turn.icon,
@@ -580,7 +666,7 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
       distanceKm: remainingKm,
       durationMin: remainingMin,
     });
-  }, [userCoords, isNavigating, routeInfo, routeMode, isPannedDuringNav]);
+  }, [effectiveNavCoords, isNavigating, routeInfo, routeMode, isPannedDuringNav]);
 
   // Bắt đầu chế độ Dẫn đường thực tế 3D (Tính năng 8)
   const handleStartNavigation = () => {
@@ -591,9 +677,10 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
     setShowSearchResults(false);
     setShowRadiusDrawer(false);
 
-    const startLat = userCoords?.latitude ?? Number(routeInfo.points[0].lat ?? routeInfo.points[0].latitude);
-    const startLng = userCoords?.longitude ?? Number(routeInfo.points[0].lng ?? routeInfo.points[0].longitude);
-    const nextPt = routeInfo.points[1] || routeInfo.points[0];
+    const startPt = routeInfo.points[0];
+    const startLat = Number(startPt.lat ?? startPt.latitude ?? userCoords?.latitude ?? DEFAULT_COORDS.latitude);
+    const startLng = Number(startPt.lng ?? startPt.longitude ?? userCoords?.longitude ?? DEFAULT_COORDS.longitude);
+    const nextPt = routeInfo.points[1] || startPt;
     const initialBearing = calculateBearing(
       startLat,
       startLng,
@@ -601,24 +688,31 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
       Number(nextPt.lng ?? nextPt.longitude)
     );
 
-    mapRef.current?.startNavigation(startLat, startLng, initialBearing);
+    simSegmentRef.current = { index: 0, progress: 0 };
+    setSimCoords({ latitude: startLat, longitude: startLng, heading: initialBearing });
+    setIsSimulating(true);
+
+    mapRef.current?.startNavigation(startLat, startLng, initialBearing, routeMode);
   };
 
   // Dừng chế độ dẫn đường
   const handleStopNavigation = () => {
     setIsNavigating(false);
+    setIsSimulating(false);
+    setSimCoords(null);
     setNavTurnInfo(null);
     setIsPannedDuringNav(false);
-    const lat = userCoords?.latitude ?? 16.0544;
-    const lng = userCoords?.longitude ?? 108.2022;
+    const lat = userCoords?.latitude ?? DEFAULT_COORDS.latitude;
+    const lng = userCoords?.longitude ?? DEFAULT_COORDS.longitude;
     mapRef.current?.stopNavigation(lat, lng);
   };
 
   // Căn giữa lại camera trong chế độ dẫn đường
   const handleRecenterNav = () => {
     setIsPannedDuringNav(false);
-    if (userCoords && mapRef.current) {
-      mapRef.current.startNavigation(userCoords.latitude, userCoords.longitude, userCoords.heading || 0);
+    const target = isSimulating && simCoords ? simCoords : userCoords;
+    if (target && mapRef.current) {
+      mapRef.current.startNavigation(target.latitude, target.longitude, target.heading || 0, routeMode);
     }
   };
 
@@ -1080,29 +1174,37 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
           {/* Chế độ phương tiện */}
           <View style={styles.routeModes}>
             {[
-              { id: 'driving', label: 'Lái xe', icon: 'car' },
+              { id: 'driving', label: 'Xe máy', icon: 'motorbike' },
               { id: 'walking', label: 'Đi bộ', icon: 'walk' },
               { id: 'cycling', label: 'Xe đạp', icon: 'bicycle' },
-            ].map((m) => (
-              <TouchableOpacity
-                key={m.id}
-                style={[styles.modeTab, { backgroundColor: theme.colors.parchment }, routeMode === m.id && styles.modeTabActive]}
-                onPress={() => calculateRoute(routeInfo.destCoords, routeInfo.destName, m.id)}
-              >
-                <Ionicons
-                  name={m.icon}
-                  size={14}
-                  color={routeMode === m.id ? '#FFF' : theme.colors.ink}
-                />
-                <Text style={[styles.modeTabText, { color: theme.colors.ink }, routeMode === m.id && styles.modeTabTextActive]}>
-                  {m.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            ].map((m) => {
+              const activeColor = getRouteColor(m.id);
+              const isActive = routeMode === m.id;
+              return (
+                <TouchableOpacity
+                  key={m.id}
+                  style={[
+                    styles.modeTab,
+                    { backgroundColor: theme.colors.parchment },
+                    isActive && { backgroundColor: activeColor },
+                  ]}
+                  onPress={() => calculateRoute(routeInfo.destCoords, routeInfo.destName, m.id)}
+                >
+                  <MaterialCommunityIcons
+                    name={m.icon}
+                    size={16}
+                    color={isActive ? '#FFF' : theme.colors.ink}
+                  />
+                  <Text style={[styles.modeTabText, { color: theme.colors.ink }, isActive && styles.modeTabTextActive]}>
+                    {m.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
           {/* Thống kê km và phút */}
-          <View style={styles.routeStats}>
+          <View style={[styles.routeStats, { backgroundColor: theme.colors.parchment, borderColor: theme.colors.border }]}>
             <View style={styles.statBox}>
               <Text style={[styles.statLabel, { color: theme.colors.inkMuted }]}>Khoảng cách</Text>
               <Text style={[styles.statVal, { color: theme.colors.ink }]}>{routeInfo.distanceKm} km</Text>
@@ -1116,12 +1218,18 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
 
           {/* Nút Bắt Đầu Dẫn Đường Thực Tế 3D bằng Dijkstra */}
           <TouchableOpacity
-            style={styles.btnStartNavigation}
+            style={[styles.btnStartNavigation, { backgroundColor: getRouteColor(routeMode) }]}
             onPress={handleStartNavigation}
             activeOpacity={0.8}
           >
-            <Ionicons name="navigate" size={18} color="#FFF" />
-            <Text style={styles.btnStartNavigationText}>🧭 Bắt đầu đi (Dijkstra Nav)</Text>
+            <MaterialCommunityIcons
+              name={routeMode === 'walking' ? 'walk' : routeMode === 'cycling' ? 'bicycle' : 'motorbike'}
+              size={19}
+              color="#FFF"
+            />
+            <Text style={styles.btnStartNavigationText}>
+              Bắt đầu đi ({routeMode === 'walking' ? 'Đi bộ' : routeMode === 'cycling' ? 'Xe đạp' : 'Xe máy'})
+            </Text>
           </TouchableOpacity>
         </View>
       )}
@@ -1195,19 +1303,34 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
                   {routeInfo?.destName || 'Điểm đến'}
                 </Text>
                 <Text style={styles.navModeLabel}>
-                  {routeMode === 'driving' ? '🚗 Lái xe' : routeMode === 'walking' ? '🚶 Đi bộ' : '🚲 Xe đạp'}
+                  {routeMode === 'driving' ? '🏍️ Xe máy' : routeMode === 'walking' ? '🚶 Đi bộ' : '🚲 Xe đạp'}
+                  {isSimulating ? ' • Mô phỏng' : ' • GPS thực'}
                 </Text>
               </View>
             </View>
 
-            <TouchableOpacity
-              style={styles.btnStopNav}
-              onPress={handleStopNavigation}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="stop-circle" size={18} color="#FFF" />
-              <Text style={styles.btnStopNavText}>Dừng dẫn đường</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity
+                style={[
+                  styles.btnStopNav,
+                  { flex: 1, backgroundColor: isSimulating ? '#0284C7' : '#44403C' },
+                ]}
+                onPress={() => setIsSimulating((prev) => !prev)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name={isSimulating ? 'pause-circle' : 'play-circle'} size={18} color="#FFF" />
+                <Text style={styles.btnStopNavText}>{isSimulating ? 'Dùng GPS thực' : 'Mô phỏng'}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.btnStopNav, { flex: 1 }]}
+                onPress={handleStopNavigation}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="stop-circle" size={18} color="#FFF" />
+                <Text style={styles.btnStopNavText}>Dừng dẫn đường</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </>
       )}
@@ -1788,7 +1911,9 @@ const styles = StyleSheet.create({
   routeStats: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5DC',
+    backgroundColor: THEME.colors.parchment,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 10,
