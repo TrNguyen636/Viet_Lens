@@ -58,8 +58,6 @@ export default function HomeScreen({ user, onSelectSite, onNavigateToCamera, onN
   const [selectedProvince, setSelectedProvince] = useState('all');
   const [isProvinceModalVisible, setIsProvinceModalVisible] = useState(false);
   const [provinceSearchQuery, setProvinceSearchQuery] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [viewMode, setViewMode] = useState('paged'); // 'paged' (theo trang) | 'continuous' (xem thêm nối tiếp)
   const [continuousCount, setContinuousCount] = useState(PAGE_SIZE);
 
   useEffect(() => {
@@ -269,31 +267,17 @@ export default function HomeScreen({ user, onSelectSite, onNavigateToCamera, onN
     return result;
   }, [allSites, selectedProvince, search]);
 
-  // Reset trang và số lượng hiển thị khi đổi bộ lọc
+  // Reset số lượng hiển thị khi đổi bộ lọc
   useEffect(() => {
-    setCurrentPage(1);
     setContinuousCount(PAGE_SIZE);
   }, [selectedProvince, search]);
 
-  // Tính toán phân trang
   const totalItems = filteredSites.length;
-  const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
 
-  // Danh sách di tích thực tế được hiển thị trên giao diện
+  // Danh sách di tích thực tế được hiển thị trên giao diện (mặc định nối tiếp)
   const displayedSites = useMemo(() => {
-    if (viewMode === 'paged') {
-      const start = (currentPage - 1) * PAGE_SIZE;
-      return filteredSites.slice(start, start + PAGE_SIZE);
-    } else {
-      return filteredSites.slice(0, continuousCount);
-    }
-  }, [filteredSites, viewMode, currentPage, continuousCount]);
-
-  // Chuyển trang mượt mà
-  const handleSelectPage = (pageNumber) => {
-    if (pageNumber < 1 || pageNumber > totalPages || pageNumber === currentPage) return;
-    setCurrentPage(pageNumber);
-  };
+    return filteredSites.slice(0, continuousCount);
+  }, [filteredSites, continuousCount]);
 
   // Nút xem thêm trong chế độ nối tiếp
   const handleLoadMore = () => {
@@ -303,22 +287,6 @@ export default function HomeScreen({ user, onSelectSite, onNavigateToCamera, onN
   const handleCollapse = () => {
     setContinuousCount(PAGE_SIZE);
   };
-
-  // Tạo dải số trang dạng [ 1 ] [ 2 ] [ 3 ] ... [ N ]
-  const paginationRange = useMemo(() => {
-    if (totalPages <= 7) {
-      return Array.from({ length: totalPages }, (_, i) => i + 1);
-    }
-    const pages = [];
-    if (currentPage <= 4) {
-      pages.push(1, 2, 3, 4, 5, '...', totalPages);
-    } else if (currentPage >= totalPages - 3) {
-      pages.push(1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
-    } else {
-      pages.push(1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages);
-    }
-    return pages;
-  }, [totalPages, currentPage]);
 
   // Xử lý lỗi load ảnh: ghi nhận ID để fallback sang placeholder
   const handleImageError = (siteId) => {
@@ -492,40 +460,9 @@ export default function HomeScreen({ user, onSelectSite, onNavigateToCamera, onN
 
       {/* Tiêu đề danh sách Di sản & Bộ lọc Tỉnh/Thành phố */}
       <View style={styles.sectionRow}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>
-            {t('home.exploreSectionTitle')}
-          </Text>
-          <View style={[styles.countPill, { backgroundColor: isDark ? '#2D2820' : theme.colors.parchment }]}>
-            <Text style={[styles.countPillText, { color: theme.colors.amber }]}>
-              {filteredSites.length} {t('home.relicCountUnit')}
-            </Text>
-          </View>
-        </View>
-
-        {/* Nút chuyển chế độ: Phân trang (Tab 1 2 3) / Cuộn nối tiếp */}
-        <View style={[styles.modeSwitchWrap, { backgroundColor: isDark ? '#26231F' : '#EFEAE1' }]}>
-          <TouchableOpacity
-            style={[styles.modeSwitchBtn, viewMode === 'paged' && [styles.modeSwitchBtnActive, { backgroundColor: theme.colors.card }]]}
-            onPress={() => setViewMode('paged')}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="documents-outline" size={13} color={viewMode === 'paged' ? theme.colors.red : theme.colors.inkMuted} />
-            <Text style={[styles.modeSwitchText, { color: viewMode === 'paged' ? theme.colors.red : theme.colors.inkMuted }]}>
-              {t('home.modePaged')}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.modeSwitchBtn, viewMode === 'continuous' && [styles.modeSwitchBtnActive, { backgroundColor: theme.colors.card }]]}
-            onPress={() => setViewMode('continuous')}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="infinite-outline" size={14} color={viewMode === 'continuous' ? theme.colors.red : theme.colors.inkMuted} />
-            <Text style={[styles.modeSwitchText, { color: viewMode === 'continuous' ? theme.colors.red : theme.colors.inkMuted }]}>
-              {t('home.modeContinuous')}
-            </Text>
-          </TouchableOpacity>
-        </View>
+        <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>
+          {t('home.exploreSectionTitle')}
+        </Text>
       </View>
 
       {/* Thanh Dropdown Chọn Tỉnh/Thành phố Hiện Đại */}
@@ -667,110 +604,38 @@ export default function HomeScreen({ user, onSelectSite, onNavigateToCamera, onN
           ))
         )}
 
-        {/* Thanh Điều Hướng Phân Trang Hoặc Nút Xem Thêm */}
+        {/* Nút Xem Thêm Nối Tiếp */}
         {!isLoading && filteredSites.length > 0 && (
           <View style={styles.paginationSection}>
-            {/* Chế độ 1: Phân trang dạng Tab 1 2 3 ... N */}
-            {viewMode === 'paged' && totalPages > 1 && (
-              <View style={styles.pagedControlsWrapper}>
-                <Text style={[styles.pageStatusText, { color: theme.colors.inkMuted }]}>
-                  {t('home.page')} {currentPage} / {totalPages} ({t('home.showingCount', { shown: displayedSites.length, total: totalItems })})
-                </Text>
+            <View style={styles.continuousControlsWrapper}>
+              <Text style={[styles.pageStatusText, { color: theme.colors.inkMuted }]}>
+                {t('home.showingCount', { shown: displayedSites.length, total: totalItems })}
+              </Text>
 
-                <View style={styles.paginationRow}>
-                  {/* Nút Trước */}
-                  <TouchableOpacity
-                    style={[
-                      styles.pageNavBtn,
-                      { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
-                      currentPage === 1 && styles.pageNavBtnDisabled,
-                    ]}
-                    disabled={currentPage === 1}
-                    onPress={() => handleSelectPage(currentPage - 1)}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="chevron-back" size={18} color={currentPage === 1 ? theme.colors.inkLight : theme.colors.ink} />
-                  </TouchableOpacity>
-
-                  {/* Dải số trang */}
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pageNumberScroll}>
-                    {paginationRange.map((p, idx) => {
-                      if (p === '...') {
-                        return (
-                          <View key={`dots-${idx}`} style={styles.pageEllipsis}>
-                            <Text style={[styles.pageEllipsisText, { color: theme.colors.inkMuted }]}>...</Text>
-                          </View>
-                        );
-                      }
-                      const isActive = p === currentPage;
-                      return (
-                        <TouchableOpacity
-                          key={`page-${p}`}
-                          style={[
-                            styles.pageNumberBtn,
-                            { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
-                            isActive && [styles.pageNumberBtnActive, { backgroundColor: theme.colors.red, borderColor: theme.colors.red }],
-                          ]}
-                          onPress={() => handleSelectPage(p)}
-                          activeOpacity={0.8}
-                        >
-                          <Text style={[styles.pageNumberText, { color: theme.colors.ink }, isActive && styles.pageNumberTextActive]}>
-                            {p}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </ScrollView>
-
-                  {/* Nút Sau */}
-                  <TouchableOpacity
-                    style={[
-                      styles.pageNavBtn,
-                      { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
-                      currentPage === totalPages && styles.pageNavBtnDisabled,
-                    ]}
-                    disabled={currentPage === totalPages}
-                    onPress={() => handleSelectPage(currentPage + 1)}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="chevron-forward" size={18} color={currentPage === totalPages ? theme.colors.inkLight : theme.colors.ink} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
-
-            {/* Chế độ 2: Nút Xem Thêm Nối Tiếp */}
-            {viewMode === 'continuous' && (
-              <View style={styles.continuousControlsWrapper}>
-                <Text style={[styles.pageStatusText, { color: theme.colors.inkMuted }]}>
-                  {t('home.showingCount', { shown: displayedSites.length, total: totalItems })}
-                </Text>
-
-                {displayedSites.length < totalItems ? (
-                  <TouchableOpacity
-                    style={[styles.loadMoreBtn, { backgroundColor: theme.colors.card, borderColor: theme.colors.red }]}
-                    onPress={handleLoadMore}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="add-circle-outline" size={18} color={theme.colors.red} />
-                    <Text style={[styles.loadMoreText, { color: theme.colors.red }]}>
-                      {t('home.loadMore', { count: Math.min(PAGE_SIZE, totalItems - displayedSites.length) })}
-                    </Text>
-                  </TouchableOpacity>
-                ) : totalItems > PAGE_SIZE ? (
-                  <TouchableOpacity
-                    style={[styles.loadMoreBtn, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
-                    onPress={handleCollapse}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="chevron-up" size={18} color={theme.colors.inkMuted} />
-                    <Text style={[styles.loadMoreText, { color: theme.colors.inkMuted }]}>
-                      {t('home.collapse')}
-                    </Text>
-                  </TouchableOpacity>
-                ) : null}
-              </View>
-            )}
+              {displayedSites.length < totalItems ? (
+                <TouchableOpacity
+                  style={[styles.loadMoreBtn, { backgroundColor: theme.colors.card, borderColor: theme.colors.red }]}
+                  onPress={handleLoadMore}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="add-circle-outline" size={18} color={theme.colors.red} />
+                  <Text style={[styles.loadMoreText, { color: theme.colors.red }]}>
+                    {t('home.loadMore', { count: Math.min(PAGE_SIZE, totalItems - displayedSites.length) })}
+                  </Text>
+                </TouchableOpacity>
+              ) : totalItems > PAGE_SIZE ? (
+                <TouchableOpacity
+                  style={[styles.loadMoreBtn, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
+                  onPress={handleCollapse}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="chevron-up" size={18} color={theme.colors.inkMuted} />
+                  <Text style={[styles.loadMoreText, { color: theme.colors.inkMuted }]}>
+                    {t('home.collapse')}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
           </View>
         )}
       </View>
