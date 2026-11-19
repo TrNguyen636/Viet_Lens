@@ -78,9 +78,9 @@ axiosClient.interceptors.request.use(
       // 3. Đính kèm mã ngôn ngữ hiện tại vào header Accept-Language
       try {
         const currentLang = await AsyncStorage.getItem('user_preferred_language');
-        config.headers['Accept-Language'] = ['en', 'ja'].includes(currentLang) ? currentLang : 'vi';
+        config.headers['Accept-Language'] = ['vi', 'en', 'ja'].includes(currentLang) ? currentLang : 'en';
       } catch (langErr) {
-        config.headers['Accept-Language'] = 'vi';
+        config.headers['Accept-Language'] = 'en';
       }
     } catch (err) {
       console.warn('[axiosClient] Lỗi khi cấu hình Request Headers:', err?.message);

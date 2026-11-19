@@ -19,7 +19,7 @@ async function applySupabaseTranslations(rows) {
   if (normalized.length === 0) return normalized;
 
   try {
-    const lang = (await AsyncStorage.getItem('user_preferred_language')) || 'vi';
+    const lang = (await AsyncStorage.getItem('user_preferred_language')) || 'en';
     if (lang === 'vi') return normalized;
 
     const { data: translations, error } = await supabase
@@ -118,7 +118,7 @@ export const appService = {
     }
 
     // Dự phòng ngoại tuyến cấp cao nhất: AsyncStorage / Seed Data
-    const lang = (await AsyncStorage.getItem('user_preferred_language')) || 'vi';
+    const lang = (await AsyncStorage.getItem('user_preferred_language')) || 'en';
     return await getOfflineHeritages(lang);
   },
 
@@ -141,7 +141,7 @@ export const appService = {
       try {
         all = await fetchHeritageFromSupabaseDirect();
       } catch {
-        const lang = (await AsyncStorage.getItem('user_preferred_language')) || 'vi';
+        const lang = (await AsyncStorage.getItem('user_preferred_language')) || 'en';
         all = await getOfflineHeritages(lang);
       }
       if (!q) return all;
@@ -174,7 +174,7 @@ export const appService = {
       try {
         all = await fetchHeritageFromSupabaseDirect();
       } catch {
-        const lang = (await AsyncStorage.getItem('user_preferred_language')) || 'vi';
+        const lang = (await AsyncStorage.getItem('user_preferred_language')) || 'en';
         all = await getOfflineHeritages(lang);
       }
       return (all || [])
@@ -289,7 +289,7 @@ export const appService = {
     }
 
     // Fallback Offline Storage
-    const lang = (await AsyncStorage.getItem('user_preferred_language')) || 'vi';
+    const lang = (await AsyncStorage.getItem('user_preferred_language')) || 'en';
     const offlineList = await getOfflineHeritages(lang);
     return offlineList.find((item) => String(item.id) === String(id)) || null;
   },

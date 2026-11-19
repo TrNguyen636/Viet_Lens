@@ -156,6 +156,7 @@ function generateGoogleMapsWebGLHTML(initialLang = 'vi') {
     var userHeadingEl = null;
     var isNavigatingMode = false;
     var currentNavMode = 'driving';
+    var currentMapLang = '${safeLang}';
     var lastMarkerIsNav = false;
     var lastMarkerMode = null;
     var currentNavBearing = 0;
@@ -443,12 +444,15 @@ function generateGoogleMapsWebGLHTML(initialLang = 'vi') {
           longitude: coords[0]
         };
 
+        var fallbackCat = currentMapLang === 'ja' ? '遺産' : (currentMapLang === 'en' ? 'Heritage' : 'Di sản');
+        var fallbackCountry = currentMapLang === 'ja' ? 'ベトナム' : (currentMapLang === 'en' ? 'Vietnam' : 'Việt Nam');
+
         if (activePopup) activePopup.remove();
         activePopup = new maplibregl.Popup({ offset: 14, closeButton: false })
           .setLngLat(coords)
           .setHTML(
             '<div class="popup-title">' + (siteObj.name || '') + '</div>' +
-            '<div class="popup-sub">' + (siteObj.category || 'Di sản') + ' • ' + (siteObj.province || 'Việt Nam') + '</div>'
+            '<div class="popup-sub">' + (siteObj.category || fallbackCat) + ' • ' + (siteObj.province || fallbackCountry) + '</div>'
           )
           .addTo(map);
 
@@ -739,6 +743,7 @@ function generateGoogleMapsWebGLHTML(initialLang = 'vi') {
     window.setMapLanguage = function(lang) {
       if (!map) return;
       var hl = (lang === 'ja' || lang === 'en') ? lang : 'vi';
+      currentMapLang = hl;
       var roadmapSrc = map.getSource('google-roadmap');
       if (roadmapSrc && typeof roadmapSrc.setTiles === 'function') {
         roadmapSrc.setTiles([

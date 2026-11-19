@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { THEME } from '../utils/theme';
@@ -27,6 +28,7 @@ const { width } = Dimensions.get('window');
 WebBrowser.maybeCompleteAuthSession();
 
 export default function AuthScreen({ onLoginSuccess }) {
+  const { t } = useTranslation();
   // 'login' | 'register'
   const [authMode, setAuthMode] = useState('login');
 
@@ -57,25 +59,25 @@ export default function AuthScreen({ onLoginSuccess }) {
     setErrorMessage('');
   };
 
-  // Dịch thông báo lỗi Supabase sang tiếng Việt dễ hiểu
+  // Dịch thông báo lỗi Supabase theo ngôn ngữ hiện tại
   const translateSupabaseError = (err) => {
     const msg = err?.message || '';
     if (msg.includes('Invalid login credentials')) {
-      return 'Email hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại!';
+      return t('auth.errInvalidLogin');
     }
     if (msg.includes('Email not confirmed')) {
-      return 'Tài khoản chưa được kích hoạt qua email. Vui lòng kiểm tra hộp thư của bạn!';
+      return t('auth.errEmailNotConfirmed');
     }
     if (msg.includes('User already registered')) {
-      return 'Email này đã tồn tại tài khoản. Vui lòng chuyển sang tab Đăng nhập!';
+      return t('auth.errUserExists');
     }
     if (msg.includes('Password should be at least')) {
-      return 'Mật khẩu phải chứa ít nhất 6 ký tự!';
+      return t('auth.errPasswordLen');
     }
     if (msg.includes('access_denied') || msg.includes('access blocked')) {
-      return 'Xác thực Google bị từ chối hoặc tài khoản chưa được cấp quyền trong Google Cloud Console.';
+      return t('auth.errGoogleDenied');
     }
-    return msg || 'Có lỗi xảy ra trong quá trình xác thực.';
+    return msg || t('auth.errGenericAuth');
   };
 
   // ==========================================
@@ -85,7 +87,7 @@ export default function AuthScreen({ onLoginSuccess }) {
     const cleanEmail = user.email || '';
     const initialUser = {
       id: user.id,
-      name: user.user_metadata?.full_name || user.user_metadata?.name || cleanEmail.split('@')[0] || 'Du khách',
+      name: user.user_metadata?.full_name || user.user_metadata?.name || cleanEmail.split('@')[0] || t('auth.guestName'),
       email: cleanEmail,
       avatarUrl: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
       role: 'USER',
@@ -116,7 +118,7 @@ export default function AuthScreen({ onLoginSuccess }) {
   const handleSignIn = async () => {
     const cleanEmail = email.trim();
     if (!cleanEmail || !password) {
-      setErrorMessage('Vui lòng nhập đầy đủ Email và Mật khẩu.');
+      setErrorMessage(t('auth.errMissingLogin'));
       return;
     }
 
@@ -130,14 +132,14 @@ export default function AuthScreen({ onLoginSuccess }) {
       });
 
       if (error) throw error;
-      if (!data.user) throw new Error('Không nhận được thông tin người dùng từ Supabase.');
+      if (!data.user) throw new Error(t('auth.errNoUser'));
 
       console.log('Đăng nhập Supabase thành công:', data.user.id);
       await syncAndCompleteLogin(data.user, data.session?.access_token);
     } catch (err) {
       const msg = translateSupabaseError(err);
       setErrorMessage(msg);
-      Alert.alert('Đăng nhập thất bại', msg);
+      Alert.alert(t('auth.loginFailedTitle'), msg);
     } finally {
       setLoading(false);
     }
@@ -151,17 +153,17 @@ export default function AuthScreen({ onLoginSuccess }) {
     const cleanName = fullName.trim();
 
     if (!cleanName || !cleanEmail || !password || !confirmPassword) {
-      setErrorMessage('Vui lòng điền đầy đủ tất cả các trường.');
+      setErrorMessage(t('auth.errMissingFields'));
       return;
     }
 
     if (password.length < 6) {
-      setErrorMessage('Mật khẩu phải có độ dài tối thiểu 6 ký tự.');
+      setErrorMessage(t('auth.errPasswordLen'));
       return;
     }
 
     if (password !== confirmPassword) {
-      setErrorMessage('Mật khẩu xác nhận không trùng khớp.');
+      setErrorMessage(t('auth.errPasswordMismatch'));
       return;
     }
 
@@ -184,20 +186,20 @@ export default function AuthScreen({ onLoginSuccess }) {
 
       // Nếu Supabase trả về session ngay (Auto-confirm hoặc không bật xác thực email)
       if (data.session && data.user) {
-        Alert.alert('Đăng ký thành công 🎉', 'Chào mừng bạn đến với VietLens!', [
+        Alert.alert(t('auth.registerSuccessTitle'), t('auth.registerSuccessMsg'), [
           {
-            text: 'Bắt đầu khám phá',
+            text: t('auth.registerSuccessBtn'),
             onPress: () => syncAndCompleteLogin(data.user, data.session?.access_token),
           },
         ]);
       } else {
         // Trường hợp Supabase bật tính năng Confirm Email
         Alert.alert(
-          'Đăng ký thành công 🎉',
-          'Một liên kết xác thực đã được gửi tới email của bạn. Vui lòng kiểm tra hộp thư (cả mục Spam) để kích hoạt trước khi đăng nhập.',
+          t('auth.registerSuccessTitle'),
+          t('auth.registerVerifyMsg'),
           [
             {
-              text: 'Đã hiểu, chuyển sang Đăng nhập',
+              text: t('auth.registerVerifyBtn'),
               onPress: () => switchMode('login'),
             },
           ]
@@ -206,7 +208,7 @@ export default function AuthScreen({ onLoginSuccess }) {
     } catch (err) {
       const msg = translateSupabaseError(err);
       setErrorMessage(msg);
-      Alert.alert('Đăng ký thất bại', msg);
+      Alert.alert(t('auth.registerFailedTitle'), msg);
     } finally {
       setLoading(false);
     }
@@ -255,7 +257,7 @@ export default function AuthScreen({ onLoginSuccess }) {
       });
 
       if (error) throw error;
-      if (!data?.url) throw new Error('Không nhận được liên kết xác thực Google từ Supabase.');
+      if (!data?.url) throw new Error(t('auth.errNoGoogleUrl'));
 
       // 3. Mở phiên trình duyệt WebBrowser
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
@@ -293,7 +295,7 @@ export default function AuthScreen({ onLoginSuccess }) {
       console.error('[Google Auth Error]:', err);
       const msg = translateSupabaseError(err);
       setErrorMessage(msg);
-      Alert.alert('Đăng nhập Google', msg);
+      Alert.alert(t('auth.googleAuthTitle'), msg);
     } finally {
       setGoogleLoading(false);
     }
@@ -305,7 +307,7 @@ export default function AuthScreen({ onLoginSuccess }) {
   const handleGuestMode = () => {
     const guestUser = {
       id: 'guest-' + Math.random().toString(36).substring(2, 9),
-      name: 'Khách Khám Phá',
+      name: t('auth.guestName'),
       email: null,
       role: 'GUEST',
     };
@@ -319,8 +321,8 @@ export default function AuthScreen({ onLoginSuccess }) {
     const cleanEmail = email.trim();
     if (!cleanEmail) {
       Alert.alert(
-        'Quên Mật Khẩu',
-        'Vui lòng nhập địa chỉ Email của bạn vào ô bên dưới, sau đó bấm lại nút "Quên mật khẩu?".'
+        t('auth.forgotTitle'),
+        t('auth.forgotEnterEmail')
       );
       return;
     }
@@ -330,11 +332,11 @@ export default function AuthScreen({ onLoginSuccess }) {
       const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail);
       if (error) throw error;
       Alert.alert(
-        'Đã gửi liên kết',
-        `Một liên kết đặt lại mật khẩu đã được gửi tới ${cleanEmail}. Vui lòng kiểm tra hộp thư.`
+        t('auth.forgotSentTitle'),
+        t('auth.forgotSentMsg', { email: cleanEmail })
       );
     } catch (err) {
-      Alert.alert('Lỗi', translateSupabaseError(err));
+      Alert.alert(t('auth.errorTitle'), translateSupabaseError(err));
     } finally {
       setLoading(false);
     }
@@ -355,15 +357,15 @@ export default function AuthScreen({ onLoginSuccess }) {
           {/* Header Title */}
           <View style={styles.header}>
             <View style={styles.badgeWrapper}>
-              <Text style={styles.badgeText}>BẢO TỒN & PHÁT HUY DI SẢN</Text>
+              <Text style={styles.badgeText}>{t('auth.badge')}</Text>
             </View>
             <Text style={styles.welcomeTitle}>
-              Chào Mừng Đến Với{'\n'}VietLens
+              {t('auth.welcomeTitle')}
             </Text>
             <Text style={styles.welcomeSubtitle}>
               {authMode === 'login'
-                ? 'Đăng nhập để đồng bộ cuốn Hộ Chiếu Di Sản và trò chuyện cùng trợ lý AI văn hóa.'
-                : 'Tạo tài khoản mới để bắt đầu hành trình khám phá di sản 4.0 khắp Việt Nam.'}
+                ? t('auth.loginSubtitle')
+                : t('auth.registerSubtitle')}
             </Text>
           </View>
 
@@ -383,7 +385,7 @@ export default function AuthScreen({ onLoginSuccess }) {
                   authMode === 'login' && styles.tabButtonTextActive,
                 ]}
               >
-                Đăng Nhập
+                {t('auth.loginTab')}
               </Text>
             </TouchableOpacity>
 
@@ -401,7 +403,7 @@ export default function AuthScreen({ onLoginSuccess }) {
                   authMode === 'register' && styles.tabButtonTextActive,
                 ]}
               >
-                Đăng Ký
+                {t('auth.registerTab')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -419,7 +421,7 @@ export default function AuthScreen({ onLoginSuccess }) {
             {/* Họ và tên (chỉ hiển thị khi Đăng ký) */}
             {authMode === 'register' && (
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Họ và tên</Text>
+                <Text style={styles.inputLabel}>{t('auth.fullNameLabel')}</Text>
                 <View style={styles.inputWrapper}>
                   <Ionicons
                     name="person-outline"
@@ -429,7 +431,7 @@ export default function AuthScreen({ onLoginSuccess }) {
                   />
                   <TextInput
                     style={styles.textInput}
-                    placeholder="Ví dụ: Nguyễn Văn An"
+                    placeholder={t('auth.fullNamePlaceholder')}
                     placeholderTextColor={THEME.colors.inkLight}
                     value={fullName}
                     onChangeText={setFullName}
@@ -441,7 +443,7 @@ export default function AuthScreen({ onLoginSuccess }) {
 
             {/* Email */}
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Địa chỉ Email</Text>
+              <Text style={styles.inputLabel}>{t('auth.emailLabel')}</Text>
               <View style={styles.inputWrapper}>
                 <Ionicons
                   name="mail-outline"
@@ -465,10 +467,10 @@ export default function AuthScreen({ onLoginSuccess }) {
             {/* Mật khẩu */}
             <View style={styles.inputGroup}>
               <View style={styles.passwordHeader}>
-                <Text style={styles.inputLabel}>Mật khẩu</Text>
+                <Text style={styles.inputLabel}>{t('auth.passwordLabel')}</Text>
                 {authMode === 'login' && (
                   <TouchableOpacity onPress={handleForgotPassword} activeOpacity={0.7}>
-                    <Text style={styles.forgotPasswordText}>Quên mật khẩu?</Text>
+                    <Text style={styles.forgotPasswordText}>{t('auth.forgotPassword')}</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -481,7 +483,7 @@ export default function AuthScreen({ onLoginSuccess }) {
                 />
                 <TextInput
                   style={styles.textInput}
-                  placeholder="Tối thiểu 6 ký tự"
+                  placeholder={t('auth.passwordPlaceholder')}
                   placeholderTextColor={THEME.colors.inkLight}
                   value={password}
                   onChangeText={setPassword}
@@ -504,7 +506,7 @@ export default function AuthScreen({ onLoginSuccess }) {
             {/* Xác nhận mật khẩu (chỉ hiển thị khi Đăng ký) */}
             {authMode === 'register' && (
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Xác nhận mật khẩu</Text>
+                <Text style={styles.inputLabel}>{t('auth.confirmPasswordLabel')}</Text>
                 <View style={styles.inputWrapper}>
                   <Ionicons
                     name="shield-checkmark-outline"
@@ -514,7 +516,7 @@ export default function AuthScreen({ onLoginSuccess }) {
                   />
                   <TextInput
                     style={styles.textInput}
-                    placeholder="Nhập lại mật khẩu"
+                    placeholder={t('auth.confirmPasswordPlaceholder')}
                     placeholderTextColor={THEME.colors.inkLight}
                     value={confirmPassword}
                     onChangeText={setConfirmPassword}
@@ -546,7 +548,7 @@ export default function AuthScreen({ onLoginSuccess }) {
                 <ActivityIndicator color="#FFF" />
               ) : (
                 <Text style={styles.primaryBtnText}>
-                  {authMode === 'login' ? 'Đăng Nhập' : 'Tạo Tài Khoản'}
+                  {authMode === 'login' ? t('auth.loginBtn') : t('auth.registerBtn')}
                 </Text>
               )}
             </TouchableOpacity>
@@ -554,7 +556,7 @@ export default function AuthScreen({ onLoginSuccess }) {
             {/* Đường phân cách */}
             <View style={styles.dividerRow}>
               <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>HOẶC TIẾP TỤC VỚI</Text>
+              <Text style={styles.dividerText}>{t('auth.orContinueWith')}</Text>
               <View style={styles.dividerLine} />
             </View>
 
@@ -570,7 +572,7 @@ export default function AuthScreen({ onLoginSuccess }) {
               ) : (
                 <View style={styles.googleContentRow}>
                   <Ionicons name="logo-google" size={19} color="#EA4335" style={{ marginRight: 10 }} />
-                  <Text style={styles.googleBtnText}>Tiếp tục với Google</Text>
+                  <Text style={styles.googleBtnText}>{t('auth.googleBtn')}</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -583,14 +585,14 @@ export default function AuthScreen({ onLoginSuccess }) {
               activeOpacity={0.8}
             >
               <Ionicons name="compass-outline" size={18} color={THEME.colors.amber} style={{ marginRight: 8 }} />
-              <Text style={styles.guestBtnText}>Khám phá ngay (Chế độ Khách)</Text>
+              <Text style={styles.guestBtnText}>{t('auth.guestBtn')}</Text>
             </TouchableOpacity>
           </View>
 
           {/* Footer Terms */}
           <View style={styles.termsWrapper}>
             <Text style={styles.termsText}>
-              Bằng việc tiếp tục, bạn đồng ý với Điều khoản Dịch vụ và Chính sách Bảo mật của VietLens.
+              {t('auth.terms')}
             </Text>
           </View>
         </ScrollView>

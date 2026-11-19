@@ -19,8 +19,8 @@ i18n
   .init({
     compatibilityJSON: 'v3',
     resources,
-    lng: 'vi', // Ngôn ngữ mặc định ban đầu
-    fallbackLng: 'vi',
+    lng: 'en', // Ngôn ngữ mặc định ban đầu
+    fallbackLng: 'en',
     interpolation: {
       escapeValue: false,
     },
@@ -37,7 +37,7 @@ export const initLanguagePreference = async () => {
   } catch (e) {
     console.warn('[i18n] Không đọc được ngôn ngữ lưu trữ:', e);
   }
-  return 'vi';
+  return 'en';
 };
 
 // Hàm chuyển đổi ngôn ngữ và lưu trữ

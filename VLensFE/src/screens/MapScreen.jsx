@@ -357,7 +357,7 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
         if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
           console.warn('[MapScreen] Lỗi tải BBox:', err.message);
           setIsOffline(true);
-          setErrorMessage('Mất kết nối backend. Đang dùng dữ liệu lưu trong phiên.');
+          setErrorMessage(t('map.offlineMsg'));
         }
       }
 
@@ -593,7 +593,7 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
       setNavTurnInfo({
         action: 'arrived',
         icon: 'flag',
-        text: `Bạn đã đến nơi: ${routeInfo.destName || 'Điểm đến'}!`,
+        text: t('map.arrivedAt', { name: routeInfo.destName || '' }),
         distMeters: 0,
       });
       const timer = setTimeout(() => {
@@ -651,10 +651,16 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
     const bearingToNext = calculateBearing(userLat, userLng, nextLat, nextLng);
 
     const turn = getTurnInstruction(effectiveNavCoords.heading || bearingToNext, nextPt, afterNextPt);
+    const turnTextMap = {
+      straight: t('map.turnStraight'),
+      right: t('map.turnRight'),
+      left: t('map.turnLeft'),
+      u_turn: t('map.turnUTurn'),
+    };
 
     setNavTurnInfo({
       icon: turn.icon,
-      text: turn.text,
+      text: turnTextMap[turn.action] || t('map.turnStraight'),
       action: turn.action,
       distMeters: Math.round(distToNextMeters),
     });
@@ -1394,13 +1400,16 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
                 onPress={() => handleStartRadiusScan(r)}
               >
                 <Text
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
                   style={[
                     styles.radiusFilterText,
                     { color: theme.colors.ink },
                     scanRadiusKm === r && styles.radiusFilterTextActive,
                   ]}
                 >
-                  Bán kính {r} km
+                  {t('map.radiusChip', { radius: r })}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -1409,8 +1418,8 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
           <ScrollView style={styles.radiusList} contentContainerStyle={{ gap: 8 }}>
             {nearbyPois.length === 0 ? (
               <View style={{ paddingVertical: 18, alignItems: 'center' }}>
-                <Text style={{ fontSize: 12, color: theme.colors.inkMuted }}>
-                  Không tìm thấy di tích nào trong bán kính {scanRadiusKm} km
+                <Text style={{ fontSize: 12, color: theme.colors.inkMuted, textAlign: 'center' }}>
+                  {t('map.noNearbyFound', { radius: scanRadiusKm })}
                 </Text>
               </View>
             ) : (
@@ -1424,7 +1433,7 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
                       {poi.name}
                     </Text>
                     <Text style={[styles.radiusItemType, { color: theme.colors.inkMuted }]}>
-                      {poi.category} • Cách {poi.distanceKm?.toFixed(1)} km
+                      {poi.category} • {t('map.distanceAway', { distance: poi.distanceKm?.toFixed(1) })}
                     </Text>
                   </View>
                   <TouchableOpacity

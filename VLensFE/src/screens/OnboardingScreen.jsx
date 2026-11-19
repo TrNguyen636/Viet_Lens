@@ -10,11 +10,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { THEME } from '../utils/theme';
 
 const { width } = Dimensions.get('window');
 
 export default function OnboardingScreen({ onFinish }) {
+  const { t } = useTranslation();
   const [step, setStep] = useState(0); // 0: Splash, 1: Scan, 2: Map, 3: Permissions
   const [logoScale] = useState(new Animated.Value(0.8));
   const [logoOpacity] = useState(new Animated.Value(0));
@@ -51,12 +53,12 @@ export default function OnboardingScreen({ onFinish }) {
             <MaterialCommunityIcons name="camera-iris" size={54} color={THEME.colors.amber} />
           </View>
           <Text style={styles.brandTitle}>VietLens</Text>
-          <Text style={styles.brandSubtitle}>Kính vạn hoa Di sản Việt Nam</Text>
+          <Text style={styles.brandSubtitle}>{t('onboarding.splashSubtitle')}</Text>
           <View style={styles.badgePill}>
-            <Text style={styles.badgeText}>Chạm góc nhìn, Mở di sản</Text>
+            <Text style={styles.badgeText}>{t('onboarding.splashBadge')}</Text>
           </View>
         </Animated.View>
-        <Text style={styles.splashFooter}>Phiên bản Di sản Văn hóa Việt • 2026</Text>
+        <Text style={styles.splashFooter}>{t('onboarding.splashFooter')}</Text>
       </View>
     );
   }
@@ -66,22 +68,22 @@ export default function OnboardingScreen({ onFinish }) {
     {
       icon: 'camera-outline',
       iconType: 'ionicons',
-      title: 'Quét Di Sản Với AI',
-      desc: 'Hướng camera vào bất kỳ đền chùa, lăng tẩm hay di vật cổ. Trí tuệ nhân tạo VietLens sẽ nhận diện ngay tức khắc thông tin lịch sử nghìn năm.',
+      title: t('onboarding.slide1Title'),
+      desc: t('onboarding.slide1Desc'),
       accent: THEME.colors.amber,
     },
     {
       icon: 'map-search-outline',
       iconType: 'material',
-      title: 'Bản Đồ Di Sản Tương Tác',
-      desc: 'Khám phá hàng trăm địa danh lịch sử trải dài từ Bắc chí Nam. Định vị thông minh gợi ý điểm đến văn hóa ngay gần bạn.',
+      title: t('onboarding.slide2Title'),
+      desc: t('onboarding.slide2Desc'),
       accent: THEME.colors.red,
     },
     {
       icon: 'shield-account-outline',
       iconType: 'material',
-      title: 'Trao Quyền Để Đồng Hành',
-      desc: 'VietLens cần quyền truy cập Camera và Vị trí để nhận diện di tích trước mắt bạn và thuyết minh Audio Guide theo từng bước chân.',
+      title: t('onboarding.slide3Title'),
+      desc: t('onboarding.slide3Desc'),
       accent: THEME.colors.green,
       isPermission: true,
     },
@@ -96,7 +98,7 @@ export default function OnboardingScreen({ onFinish }) {
         <Text style={styles.topLogo}>VietLens</Text>
         {step < 3 && (
           <TouchableOpacity onPress={onFinish}>
-            <Text style={styles.skipBtn}>Bỏ qua</Text>
+            <Text style={styles.skipBtn}>{t('onboarding.skip')}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -114,11 +116,11 @@ export default function OnboardingScreen({ onFinish }) {
             <View style={styles.permList}>
               <View style={styles.permItem}>
                 <Ionicons name="camera" size={18} color={THEME.colors.amber} />
-                <Text style={styles.permText}>Camera: Nhận diện hiện vật & di tích</Text>
+                <Text style={styles.permText}>{t('onboarding.permCamera')}</Text>
               </View>
               <View style={styles.permItem}>
                 <Ionicons name="location" size={18} color={THEME.colors.red} />
-                <Text style={styles.permText}>Vị trí GPS: Gợi ý di sản lân cận</Text>
+                <Text style={styles.permText}>{t('onboarding.permLocation')}</Text>
               </View>
             </View>
           )}
@@ -148,7 +150,7 @@ export default function OnboardingScreen({ onFinish }) {
           activeOpacity={0.8}
         >
           <Text style={styles.nextBtnText}>
-            {step === 3 ? 'Bắt đầu ngay' : 'Tiếp tục'}
+            {step === 3 ? t('onboarding.getStarted') : t('onboarding.continue')}
           </Text>
           <Ionicons name="arrow-forward" size={18} color="#FFF" style={{ marginLeft: 6 }} />
         </TouchableOpacity>
