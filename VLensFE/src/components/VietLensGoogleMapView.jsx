@@ -805,6 +805,7 @@ const VietLensGoogleMapView = forwardRef(function VietLensGoogleMapView(
   const isMapReadyRef = useRef(false);
   const pendingMarkersRef = useRef(null);
   const pendingFlyToRef = useRef(null);
+  const pendingUserLocationRef = useRef(null);
 
   useEffect(() => {
     if (isMapReadyRef.current) {
@@ -823,6 +824,8 @@ const VietLensGoogleMapView = forwardRef(function VietLensGoogleMapView(
       webViewRef.current?.injectJavaScript(script);
     },
     updateUserLocation: (lat, lng, heading, isNavigating, mode = 'driving') => {
+      pendingUserLocationRef.current = { lat, lng, heading, isNavigating, mode };
+      if (!isMapReadyRef.current) return;
       const script = `if (typeof window.updateUserLocation === 'function') { window.updateUserLocation(${lat}, ${lng}, ${heading !== undefined ? heading : 0}, ${isNavigating ? 'true' : 'false'}, '${mode}'); } true;`;
       webViewRef.current?.injectJavaScript(script);
     },
@@ -896,6 +899,11 @@ const VietLensGoogleMapView = forwardRef(function VietLensGoogleMapView(
           pendingFlyToRef.current = null;
           const flyScript = `if (typeof window.flyTo === 'function') { window.flyTo(${lat}, ${lng}, ${zoom}, ${tilt !== undefined ? tilt : 0}, ${heading !== undefined ? heading : 0}); } true;`;
           webViewRef.current?.injectJavaScript(flyScript);
+        }
+        if (pendingUserLocationRef.current) {
+          const { lat, lng, heading, isNavigating, mode } = pendingUserLocationRef.current;
+          const locScript = `if (typeof window.updateUserLocation === 'function') { window.updateUserLocation(${lat}, ${lng}, ${heading !== undefined ? heading : 0}, ${isNavigating ? 'true' : 'false'}, '${mode || 'driving'}'); } true;`;
+          webViewRef.current?.injectJavaScript(locScript);
         }
         if (onMapReady) onMapReady();
       } else if (data.type === 'MAP_LOADED') {

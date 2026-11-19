@@ -334,15 +334,7 @@ export default function DetailScreen({ site: initialSite, onBack, onNavigateToCh
                 />
               </View>
               <View style={{ flex: 1, marginLeft: 12 }}>
-                <View style={styles.audioTitleRow}>
-                  <Text style={[styles.audioTitle, { color: theme.colors.ink }]}>{t('detail.audioGuideTitle')}</Text>
-                  {isPlayingAudio && (
-                    <View style={styles.liveAudioBadge}>
-                      <View style={styles.liveAudioDot} />
-                      <Text style={styles.liveAudioText}>{t('detail.playingBadge')}</Text>
-                    </View>
-                  )}
-                </View>
+                <Text style={[styles.audioTitle, { color: theme.colors.ink }]}>{t('detail.audioGuideTitle')}</Text>
                 <Text style={[styles.audioSub, { color: theme.colors.inkMuted }]}>
                   {isPlayingAudio
                     ? t('detail.audioGuidePlaying')

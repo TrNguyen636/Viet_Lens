@@ -268,6 +268,15 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
   };
 
   const handleMapReady = () => {
+    if (userCoords?.latitude && userCoords?.longitude) {
+      mapRef.current?.updateUserLocation(
+        userCoords.latitude,
+        userCoords.longitude,
+        userCoords.heading || 0,
+        isNavigating,
+        routeMode
+      );
+    }
     if (focusedSite) {
       focusOnSite(focusedSite);
     }
