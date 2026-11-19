@@ -1,8 +1,10 @@
-import React, { useRef, useImperativeHandle, forwardRef, useMemo, useState } from 'react';
+import React, { useRef, useImperativeHandle, forwardRef, useMemo, useState, useEffect } from 'react';
 import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import { WebView } from 'react-native-webview';
+import { useTranslation } from 'react-i18next';
 
-function generateGoogleMapsWebGLHTML() {
+function generateGoogleMapsWebGLHTML(initialLang = 'vi') {
+  const safeLang = initialLang === 'ja' ? 'ja' : initialLang === 'en' ? 'en' : 'vi';
   return `
 <!DOCTYPE html>
 <html lang="vi">
@@ -143,7 +145,7 @@ function generateGoogleMapsWebGLHTML() {
 </head>
 <body>
   <div id="map"></div>
-  <div class="gm-badge">Google Maps • VN</div>
+  <div class="gm-badge" id="gm-badge">Google Maps • ${safeLang.toUpperCase()}</div>
   <script>
     var map = null;
     var isFirstLoad = true;
@@ -172,10 +174,10 @@ function generateGoogleMapsWebGLHTML() {
           'google-roadmap': {
             type: 'raster',
             tiles: [
-              'https://mt0.google.com/vt/lyrs=m&hl=vi&gl=VN&x={x}&y={y}&z={z}',
-              'https://mt1.google.com/vt/lyrs=m&hl=vi&gl=VN&x={x}&y={y}&z={z}',
-              'https://mt2.google.com/vt/lyrs=m&hl=vi&gl=VN&x={x}&y={y}&z={z}',
-              'https://mt3.google.com/vt/lyrs=m&hl=vi&gl=VN&x={x}&y={y}&z={z}'
+              'https://mt0.google.com/vt/lyrs=m&hl=${safeLang}&gl=VN&x={x}&y={y}&z={z}',
+              'https://mt1.google.com/vt/lyrs=m&hl=${safeLang}&gl=VN&x={x}&y={y}&z={z}',
+              'https://mt2.google.com/vt/lyrs=m&hl=${safeLang}&gl=VN&x={x}&y={y}&z={z}',
+              'https://mt3.google.com/vt/lyrs=m&hl=${safeLang}&gl=VN&x={x}&y={y}&z={z}'
             ],
             tileSize: 256,
             maxzoom: 20
@@ -183,10 +185,10 @@ function generateGoogleMapsWebGLHTML() {
           'google-hybrid': {
             type: 'raster',
             tiles: [
-              'https://mt0.google.com/vt/lyrs=y&hl=vi&gl=VN&x={x}&y={y}&z={z}',
-              'https://mt1.google.com/vt/lyrs=y&hl=vi&gl=VN&x={x}&y={y}&z={z}',
-              'https://mt2.google.com/vt/lyrs=y&hl=vi&gl=VN&x={x}&y={y}&z={z}',
-              'https://mt3.google.com/vt/lyrs=y&hl=vi&gl=VN&x={x}&y={y}&z={z}'
+              'https://mt0.google.com/vt/lyrs=y&hl=${safeLang}&gl=VN&x={x}&y={y}&z={z}',
+              'https://mt1.google.com/vt/lyrs=y&hl=${safeLang}&gl=VN&x={x}&y={y}&z={z}',
+              'https://mt2.google.com/vt/lyrs=y&hl=${safeLang}&gl=VN&x={x}&y={y}&z={z}',
+              'https://mt3.google.com/vt/lyrs=y&hl=${safeLang}&gl=VN&x={x}&y={y}&z={z}'
             ],
             tileSize: 256,
             maxzoom: 20
@@ -733,6 +735,35 @@ function generateGoogleMapsWebGLHTML() {
       });
     };
 
+    // Đổi ngôn ngữ hiển thị nhãn bản đồ Google Maps (vi | en | ja)
+    window.setMapLanguage = function(lang) {
+      if (!map) return;
+      var hl = (lang === 'ja' || lang === 'en') ? lang : 'vi';
+      var roadmapSrc = map.getSource('google-roadmap');
+      if (roadmapSrc && typeof roadmapSrc.setTiles === 'function') {
+        roadmapSrc.setTiles([
+          'https://mt0.google.com/vt/lyrs=m&hl=' + hl + '&gl=VN&x={x}&y={y}&z={z}',
+          'https://mt1.google.com/vt/lyrs=m&hl=' + hl + '&gl=VN&x={x}&y={y}&z={z}',
+          'https://mt2.google.com/vt/lyrs=m&hl=' + hl + '&gl=VN&x={x}&y={y}&z={z}',
+          'https://mt3.google.com/vt/lyrs=m&hl=' + hl + '&gl=VN&x={x}&y={y}&z={z}'
+        ]);
+      }
+      var hybridSrc = map.getSource('google-hybrid');
+      if (hybridSrc && typeof hybridSrc.setTiles === 'function') {
+        hybridSrc.setTiles([
+          'https://mt0.google.com/vt/lyrs=y&hl=' + hl + '&gl=VN&x={x}&y={y}&z={z}',
+          'https://mt1.google.com/vt/lyrs=y&hl=' + hl + '&gl=VN&x={x}&y={y}&z={z}',
+          'https://mt2.google.com/vt/lyrs=y&hl=' + hl + '&gl=VN&x={x}&y={y}&z={z}',
+          'https://mt3.google.com/vt/lyrs=y&hl=' + hl + '&gl=VN&x={x}&y={y}&z={z}'
+        ]);
+      }
+      var badge = document.getElementById('gm-badge');
+      if (badge) {
+        badge.textContent = 'Google Maps • ' + hl.toUpperCase();
+      }
+      map.triggerRepaint();
+    };
+
     // Tự động tải lại tile khi mạng online trở lại
     window.reloadTiles = function() {
       if (!map) return;
@@ -763,10 +794,19 @@ const VietLensGoogleMapView = forwardRef(function VietLensGoogleMapView(
   },
   ref
 ) {
+  const { i18n } = useTranslation();
+  const mapLang = i18n.language?.startsWith('ja') ? 'ja' : i18n.language?.startsWith('en') ? 'en' : 'vi';
   const webViewRef = useRef(null);
   const isMapReadyRef = useRef(false);
   const pendingMarkersRef = useRef(null);
   const pendingFlyToRef = useRef(null);
+
+  useEffect(() => {
+    if (isMapReadyRef.current) {
+      const script = `if (typeof window.setMapLanguage === 'function') { window.setMapLanguage('${mapLang}'); } true;`;
+      webViewRef.current?.injectJavaScript(script);
+    }
+  }, [mapLang]);
 
   useImperativeHandle(ref, () => ({
     flyTo: (lat, lng, zoom = 15.5, tilt, heading) => {
@@ -830,7 +870,7 @@ const VietLensGoogleMapView = forwardRef(function VietLensGoogleMapView(
 
   const htmlSource = useMemo(() => {
     return {
-      html: generateGoogleMapsWebGLHTML(),
+      html: generateGoogleMapsWebGLHTML(mapLang),
       baseUrl: 'https://www.google.com',
     };
   }, []);
@@ -840,6 +880,8 @@ const VietLensGoogleMapView = forwardRef(function VietLensGoogleMapView(
       const data = JSON.parse(event.nativeEvent.data);
       if (data.type === 'MAP_READY') {
         isMapReadyRef.current = true;
+        const langScript = `if (typeof window.setMapLanguage === 'function') { window.setMapLanguage('${mapLang}'); } true;`;
+        webViewRef.current?.injectJavaScript(langScript);
         if (pendingMarkersRef.current) {
           const script = `if (typeof window.updateMarkers === 'function') { window.updateMarkers(${JSON.stringify(pendingMarkersRef.current)}); } true;`;
           webViewRef.current?.injectJavaScript(script);

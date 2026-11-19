@@ -36,7 +36,7 @@ import {
 } from '../utils/dijkstraRouter';
 
 export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite = null }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { theme, isDark } = useTheme();
   const mapRef = useRef(null);
   const [search, setSearch] = useState('');
@@ -209,7 +209,12 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [i18n.language]);
+
+  // Xoá cache BBox khi đổi ngôn ngữ để marker tải lại đúng ngôn ngữ mới
+  useEffect(() => {
+    bboxCacheRef.current = {};
+  }, [i18n.language]);
 
   // Kho dữ liệu tìm kiếm: Toàn bộ di sản thật tải từ Supabase
   const allSearchableSites = useMemo(() => {
@@ -864,8 +869,8 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
               style={[
                 styles.searchBar,
                 {
-                  backgroundColor: isDark ? 'rgba(38, 34, 30, 0.85)' : 'rgba(255, 255, 255, 0.85)',
-                  borderColor: isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.65)',
+                  backgroundColor: isDark ? 'rgba(30, 27, 24, 0.96)' : 'rgba(255, 255, 255, 0.96)',
+                  borderColor: isDark ? 'rgba(255, 255, 255, 0.18)' : 'rgba(221, 214, 190, 0.9)',
                 },
               ]}
             >
@@ -873,7 +878,8 @@ export default function MapScreen({ onSelectSite, onNavigateToChat, focusedSite 
               <TextInput
                 style={[styles.searchInput, { color: theme.colors.ink }]}
                 placeholder={t('map.searchPlaceholder')}
-                placeholderTextColor={theme.colors.inkLight}
+                placeholderTextColor={isDark ? '#B8B2A6' : theme.colors.inkMuted}
+                underlineColorAndroid="transparent"
                 value={search}
                 onChangeText={(text) => {
                   setSearch(text);

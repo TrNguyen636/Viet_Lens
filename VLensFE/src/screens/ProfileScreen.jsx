@@ -22,7 +22,9 @@ export default function ProfileScreen({ user, onLogout }) {
   const { t, i18n } = useTranslation();
   const { theme, isDark, toggleTheme } = useTheme();
   const [showContactModal, setShowContactModal] = useState(false);
+  const [feedbackSent, setFeedbackSent] = useState(false);
   const [showAboutModal, setShowAboutModal] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [savedCount, setSavedCount] = useState(0);
   const [autoPlayAudio, setAutoPlayAudio] = useState(false);
 
@@ -177,20 +179,7 @@ export default function ProfileScreen({ user, onLogout }) {
         {/* Logout */}
         <TouchableOpacity
           style={[styles.settingRow, { borderBottomWidth: 0 }]}
-          onPress={() => {
-            Alert.alert(
-              t('profile.logoutConfirmTitle'),
-              t('profile.logoutConfirmMsg'),
-              [
-                { text: t('common.cancel'), style: 'cancel' },
-                {
-                  text: t('profile.logoutBtn'),
-                  style: 'destructive',
-                  onPress: onLogout,
-                },
-              ]
-            );
-          }}
+          onPress={() => setShowLogoutModal(true)}
         >
           <View style={styles.settingLeft}>
             <Ionicons name="log-out-outline" size={20} color={theme.colors.red} />
@@ -199,50 +188,121 @@ export default function ProfileScreen({ user, onLogout }) {
         </TouchableOpacity>
       </View>
 
-      {/* Interactive Contact & Feedback Modal */}
-      {showContactModal && (
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.contactModalCard, { backgroundColor: theme.colors.card }]}>
-            <View style={styles.modalHeaderRow}>
-              <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>{t('profile.contactModalTitle')}</Text>
-              <TouchableOpacity onPress={() => setShowContactModal(false)}>
+      <Text style={[styles.versionFooter, { color: theme.colors.inkLight }]}>{t('profile.version')}</Text>
+      <View style={{ height: 100 }} />
+
+      {/* Contact Support Modal */}
+      <Modal
+        visible={showContactModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setShowContactModal(false);
+          setFeedbackSent(false);
+        }}
+      >
+        <View style={[styles.aboutBackdrop, { backgroundColor: theme.colors.overlay }]}>
+          <View style={[styles.aboutModalCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+            <View style={[styles.aboutHeader, { borderBottomColor: theme.colors.border }]}>
+              <View style={styles.aboutBrandRow}>
+                <View style={[styles.aboutLogoBadge, { backgroundColor: theme.colors.amber }]}>
+                  <Ionicons name="help-buoy-outline" size={22} color="#FFF" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.aboutTitle, { color: theme.colors.ink }]} numberOfLines={2}>
+                    {t('profile.contactModalTitle')}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowContactModal(false);
+                  setFeedbackSent(false);
+                }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
                 <Ionicons name="close" size={22} color={theme.colors.inkMuted} />
               </TouchableOpacity>
             </View>
-            <Text style={[styles.modalDesc, { color: theme.colors.inkMuted }]}>
-              {t('profile.contactModalDesc')}
-            </Text>
 
-            <View style={[styles.contactInfoBox, { backgroundColor: theme.colors.parchment, borderColor: theme.colors.border }]}>
-              <View style={styles.contactRow}>
-                <Ionicons name="call-outline" size={18} color={theme.colors.amber} />
-                <Text style={[styles.contactRowText, { color: theme.colors.ink }]}>{t('profile.hotline')}</Text>
+            <ScrollView style={styles.aboutScroll} showsVerticalScrollIndicator={false}>
+              <View style={[styles.aboutBlock, { backgroundColor: theme.colors.parchment, borderColor: theme.colors.border }]}>
+                <Text style={[styles.aboutBlockBody, { color: theme.colors.inkMuted }]}>
+                  {t('profile.contactModalDesc')}
+                </Text>
               </View>
-              <View style={styles.contactRow}>
-                <Ionicons name="mail-outline" size={18} color={theme.colors.red} />
-                <Text style={[styles.contactRowText, { color: theme.colors.ink }]}>Email: contact@vietlens.vn</Text>
+
+              <View style={[styles.aboutBlock, { backgroundColor: theme.colors.parchment, borderColor: theme.colors.border }]}>
+                <View style={[styles.contactRow, { marginBottom: 10 }]}>
+                  <View style={[styles.aboutGoalIcon, { backgroundColor: theme.colors.card, marginTop: 0 }]}>
+                    <Ionicons name="call-outline" size={16} color={theme.colors.amber} />
+                  </View>
+                  <Text style={[styles.contactRowText, { color: theme.colors.ink, flex: 1 }]}>
+                    {t('profile.hotline')}
+                  </Text>
+                </View>
+
+                <View style={[styles.contactRow, { marginBottom: 10 }]}>
+                  <View style={[styles.aboutGoalIcon, { backgroundColor: theme.colors.card, marginTop: 0 }]}>
+                    <Ionicons name="mail-outline" size={16} color={theme.colors.red} />
+                  </View>
+                  <Text style={[styles.contactRowText, { color: theme.colors.ink, flex: 1 }]}>
+                    Email: contact@vietlens.vn
+                  </Text>
+                </View>
+
+                <View style={styles.contactRow}>
+                  <View style={[styles.aboutGoalIcon, { backgroundColor: theme.colors.card, marginTop: 0 }]}>
+                    <Ionicons name="location-outline" size={16} color={theme.colors.green} />
+                  </View>
+                  <Text style={[styles.contactRowText, { color: theme.colors.ink, flex: 1 }]}>
+                    {t('profile.office')}
+                  </Text>
+                </View>
               </View>
-              <View style={styles.contactRow}>
-                <Ionicons name="location-outline" size={18} color={theme.colors.green} />
-                <Text style={[styles.contactRowText, { color: theme.colors.ink }]}>{t('profile.office')}</Text>
-              </View>
+
+              {feedbackSent && (
+                <View style={[styles.aboutBlock, { backgroundColor: theme.colors.greenLight, borderColor: theme.colors.green }]}>
+                  <View style={styles.aboutBlockHeader}>
+                    <Ionicons name="checkmark-circle" size={18} color={theme.colors.green} />
+                    <Text style={[styles.aboutBlockTitle, { color: theme.colors.green }]}>
+                      {t('profile.feedbackSuccessTitle')}
+                    </Text>
+                  </View>
+                  <Text style={[styles.aboutBlockBody, { color: theme.colors.ink }]}>
+                    {t('profile.feedbackSuccessMsg')}
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
+
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity
+                style={[styles.logoutCancelBtn, { backgroundColor: theme.colors.parchment, borderColor: theme.colors.border }]}
+                onPress={() => {
+                  setShowContactModal(false);
+                  setFeedbackSent(false);
+                }}
+                activeOpacity={0.8}
+              >
+                <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.logoutCancelText, { color: theme.colors.ink }]}>
+                  {t('profile.aboutCloseBtn')}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.logoutConfirmBtn, { backgroundColor: theme.colors.amber }]}
+                onPress={() => setFeedbackSent(true)}
+                activeOpacity={0.85}
+              >
+                <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} style={styles.logoutConfirmText}>
+                  {t('profile.sendFeedbackBtn')}
+                </Text>
+              </TouchableOpacity>
             </View>
-
-            <TouchableOpacity
-              style={[styles.sendFeedbackBtn, { backgroundColor: theme.colors.amber }]}
-              onPress={() => {
-                setShowContactModal(false);
-                Alert.alert(t('profile.feedbackSuccessTitle'), t('profile.feedbackSuccessMsg'));
-              }}
-            >
-              <Text style={styles.sendFeedbackBtnText}>{t('profile.sendFeedbackBtn')}</Text>
-            </TouchableOpacity>
           </View>
         </View>
-      )}
-
-      <Text style={[styles.versionFooter, { color: theme.colors.inkLight }]}>{t('profile.version')}</Text>
-      <View style={{ height: 100 }} />
+      </Modal>
 
       {/* About VietLens Project Modal */}
       <Modal
@@ -336,6 +396,54 @@ export default function ProfileScreen({ user, onLogout }) {
             >
               <Text style={styles.aboutCloseBtnText}>{t('profile.aboutCloseBtn')}</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Logout Confirmation Modal */}
+      <Modal
+        visible={showLogoutModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowLogoutModal(false)}
+      >
+        <View style={[styles.aboutBackdrop, { backgroundColor: theme.colors.overlay }]}>
+          <View style={[styles.logoutModalCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+            <View style={[styles.logoutIconCircle, { backgroundColor: theme.colors.redLight }]}>
+              <Ionicons name="log-out-outline" size={28} color={theme.colors.red} />
+            </View>
+
+            <Text style={[styles.logoutModalTitle, { color: theme.colors.ink }]}>
+              {t('profile.logoutConfirmTitle')}
+            </Text>
+            <Text style={[styles.logoutModalMsg, { color: theme.colors.inkMuted }]}>
+              {t('profile.logoutConfirmMsg')}
+            </Text>
+
+            <View style={styles.logoutActionsRow}>
+              <TouchableOpacity
+                style={[styles.logoutCancelBtn, { backgroundColor: theme.colors.parchment, borderColor: theme.colors.border }]}
+                onPress={() => setShowLogoutModal(false)}
+                activeOpacity={0.8}
+              >
+                <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.logoutCancelText, { color: theme.colors.ink }]}>
+                  {t('common.cancel')}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.logoutConfirmBtn, { backgroundColor: theme.colors.red }]}
+                onPress={() => {
+                  setShowLogoutModal(false);
+                  onLogout?.();
+                }}
+                activeOpacity={0.85}
+              >
+                <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} style={styles.logoutConfirmText}>
+                  {t('profile.logoutBtn')}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -641,6 +749,66 @@ const styles = StyleSheet.create({
   aboutCloseBtnText: {
     color: '#FFF',
     fontSize: 14,
+    fontWeight: '700',
+  },
+  logoutModalCard: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 20,
+    alignItems: 'center',
+    elevation: 10,
+  },
+  logoutIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  logoutModalTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  logoutModalMsg: {
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
+    marginTop: 6,
+    marginBottom: 18,
+  },
+  logoutActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
+  },
+  logoutCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoutCancelText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+  },
+  logoutConfirmBtn: {
+    flex: 1.2,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoutConfirmText: {
+    color: '#FFF',
+    fontSize: 13.5,
     fontWeight: '700',
   },
 });
